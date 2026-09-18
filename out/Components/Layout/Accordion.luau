@@ -119,15 +119,33 @@ local function AccordionHeaderVisual(props)
 		Rotation = rotation,
 	}))))
 end
+local function toValues(value)
+	if value == nil then
+		return {}
+	end
+	local _value = value
+	return if type(_value) == "string" then { value } else value
+end
 local function RenderedAccordionItem(props)
 	local theme = React.useContext(CleanThemeContext)
 	local mounted, setMounted = React.useState(props.open)
 	local height, heightTween = useTween(0, {
 		duration = props.duration,
 	})
+	local contentRef = React.useRef()
 	React.useEffect(function()
 		if props.open then
 			setMounted(true)
+			local content = contentRef.current
+			if content ~= nil then
+				heightTween:setGoal(content.AbsoluteSize.Y, {
+					duration = props.duration,
+				})
+				if props.duration == 0 then
+					heightTween:setPosition(content.AbsoluteSize.Y)
+				end
+				heightTween:start()
+			end
 		else
 			heightTween:setGoal(0, {
 				duration = props.duration,
@@ -252,11 +270,12 @@ local function RenderedAccordionItem(props)
 		disabled = props.disabled,
 		duration = props.duration,
 		open = props.open,
-	})), mounted and (React.createElement("frame", {
+	})), (mounted or props.keepMounted) and (React.createElement("frame", {
 		key = "ContentClip",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
+		Visible = mounted,
 		Size = height:map(function(value)
 			local _exp = UDim2.fromScale(1, 0)
 			local _arg0 = UDim2.fromOffset(0, value)
@@ -264,6 +283,7 @@ local function RenderedAccordionItem(props)
 		end),
 	}, React.createElement("frame", {
 		key = "Content",
+		ref = contentRef,
 		BackgroundColor3 = theme.components.accordion.content.backgroundColor,
 		BackgroundTransparency = theme.components.accordion.content.backgroundTransparency,
 		BorderSizePixel = 0,
@@ -341,9 +361,10 @@ local Accordion = React.forwardRef(function(props, ref)
 		end)
 		return parsed
 	end, { props.children })
-	local initial = if props.defaultValue ~= nil then { props.defaultValue } else {}
-	local uncontrolled, setUncontrolled = React.useState(initial)
-	local supplied = if props.value ~= nil then { props.value } else uncontrolled
+	local uncontrolled, setUncontrolled = React.useState(function()
+		return toValues(props.defaultValue)
+	end)
+	local supplied = if props.value ~= nil then toValues(props.value) else uncontrolled
 	local _set = {}
 	-- ▼ ReadonlyArray.map ▼
 	local _newValue = table.create(#items)
@@ -372,7 +393,8 @@ local Accordion = React.forwardRef(function(props, ref)
 		end
 	end
 	-- ▲ ReadonlyArray.filter ▲
-	local openValues = _newValue_1
+	local filtered = _newValue_1
+	local openValues = if props.multiple or #filtered <= 1 then filtered else { filtered[1] }
 	React.useEffect(function()
 		local _condition = props.value == nil
 		if _condition then
@@ -406,7 +428,38 @@ local Accordion = React.forwardRef(function(props, ref)
 		local _value = item.value
 		local isOpen = table.find(openValues, _value) ~= nil
 		local nextValues
-		if isOpen then
+		if props.multiple then
+			-- ▼ ReadonlyArray.map ▼
+			local _newValue_2 = table.create(#items)
+			local _callback_2 = function(other)
+				return other.value
+			end
+			for _k, _v in items do
+				_newValue_2[_k] = _callback_2(_v, _k - 1, items)
+			end
+			-- ▲ ReadonlyArray.map ▲
+			-- ▼ ReadonlyArray.filter ▼
+			local _newValue_3 = {}
+			local _callback_3 = function(value)
+				local _result
+				if value == item.value then
+					_result = not isOpen
+				else
+					local _value_1 = value
+					_result = table.find(openValues, _value_1) ~= nil
+				end
+				return _result
+			end
+			local _length_1 = 0
+			for _k, _v in _newValue_2 do
+				if _callback_3(_v, _k - 1, _newValue_2) == true then
+					_length_1 += 1
+					_newValue_3[_length_1] = _v
+				end
+			end
+			-- ▲ ReadonlyArray.filter ▲
+			nextValues = _newValue_3
+		elseif isOpen then
 			if not props.collapsible then
 				return nil
 			end
@@ -417,9 +470,16 @@ local Accordion = React.forwardRef(function(props, ref)
 		if props.value == nil then
 			setUncontrolled(nextValues)
 		end
-		local _result = props.onValueChange
-		if _result ~= nil then
-			_result(nextValues[1])
+		if props.multiple then
+			local _result = props.onValueChange
+			if _result ~= nil then
+				_result(nextValues)
+			end
+		else
+			local _result = props.onValueChange
+			if _result ~= nil then
+				_result(nextValues[1])
+			end
 		end
 	end
 	local _attributes = {
@@ -431,7 +491,8 @@ local Accordion = React.forwardRef(function(props, ref)
 	end
 	_attributes.name = _condition
 	_attributes.width = "100%"
-	_attributes.height = "100%"
+	_attributes.height = if props.autoSize then nil else "100%"
+	_attributes.AutomaticSize = if props.autoSize then Enum.AutomaticSize.Y else nil
 	_attributes.ClipsDescendants = true
 	local _exp = React.createElement(Corners, {
 		radius = theme.components.accordion.cornerRadius,
@@ -459,6 +520,11 @@ local Accordion = React.forwardRef(function(props, ref)
 			_condition_1 = theme.components.accordion.animation.duration
 		end
 		_attributes_1.duration = _condition_1
+		local _condition_2 = props.keepMounted
+		if _condition_2 == nil then
+			_condition_2 = false
+		end
+		_attributes_1.keepMounted = _condition_2
 		_attributes_1.onActivate = function()
 			return activate(item)
 		end

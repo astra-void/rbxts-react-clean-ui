@@ -2,6 +2,7 @@ import React from "@rbxts/react";
 import {
     BackgroundElementProps,
     ButtonFlag,
+    CssPadding,
     IconElementProps,
     Intent,
     IntentElementProps,
@@ -53,6 +54,7 @@ export interface ButtonProps extends
     LayoutOrder?: number;
     styleOverride?: ButtonStyleOverride;
     name?: string;
+    padding?: CssPadding;
 }
 
 export interface ButtonTextProps extends ScalableElementProps, IntentElementProps {
@@ -102,6 +104,7 @@ function ButtonIcon(props: ButtonIconProps) {
         icon={props.icon}
         spinning={props.spinning}
         speed={props.speed}
+        LayoutOrder={props.LayoutOrder}
         color={
             ColorHelper.getIntentColors(
                 theme,

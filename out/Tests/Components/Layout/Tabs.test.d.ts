@@ -19,5 +19,7 @@ declare class TabsMountValidation {
     listGap(): void;
     tabsGap(): void;
     bodyStrokeGated(): void;
+    bodyLayoutOrder(): void;
+    bodyLayoutOrderDefault(): void;
 }
 export = TabsMountValidation;

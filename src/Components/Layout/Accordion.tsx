@@ -40,14 +40,27 @@ function AccordionContent(_props: AccordionContentProps) {
     return undefined;
 }
 
-export interface AccordionProps extends ScalableElementProps {
+interface AccordionBaseProps extends ScalableElementProps {
     children?: React.ReactNode;
     collapsible?: boolean;
     animationDuration?: number;
+    autoSize?: boolean;
+    keepMounted?: boolean;
+    name?: string;
+}
+
+export interface AccordionProps extends AccordionBaseProps {
+    multiple?: false;
     defaultValue?: string;
     value?: string;
     onValueChange?: (value: string | undefined) => void;
-    name?: string;
+}
+
+export interface AccordionMultipleProps extends AccordionBaseProps {
+    multiple: true;
+    defaultValue?: string[];
+    value?: string[];
+    onValueChange?: (value: string[]) => void;
 }
 
 interface ParsedItem {
@@ -108,14 +121,26 @@ function AccordionHeaderVisual(props: {
     );
 }
 
-function RenderedAccordionItem(props: ParsedItem & { first: boolean; open: boolean; duration: number; onActivate: () => void }) {
+function toValues(value: string | string[] | undefined): string[] {
+    if (value === undefined) return [];
+    return typeIs(value, "string") ? [value] : value;
+}
+
+function RenderedAccordionItem(props: ParsedItem & { first: boolean; open: boolean; duration: number; keepMounted: boolean; onActivate: () => void }) {
     const theme = React.useContext(CleanThemeContext);
     const [mounted, setMounted] = React.useState(props.open);
     const [height, heightTween] = useTween(0, { duration: props.duration });
+    const contentRef = React.useRef<Frame>();
 
     React.useEffect(() => {
         if (props.open) {
             setMounted(true);
+            const content = contentRef.current;
+            if (content !== undefined) {
+                heightTween.setGoal(content.AbsoluteSize.Y, { duration: props.duration });
+                if (props.duration === 0) heightTween.setPosition(content.AbsoluteSize.Y);
+                heightTween.start();
+            }
         } else {
             heightTween.setGoal(0, { duration: props.duration });
             if (props.duration === 0) heightTween.setPosition(0);
@@ -208,16 +233,18 @@ function RenderedAccordionItem(props: ParsedItem & { first: boolean; open: boole
                     )}
                     <AccordionHeaderVisual header={props.header} disabled={props.disabled} duration={props.duration} open={props.open} />
                 </HoverButton>
-                {mounted && (
+                {(mounted || props.keepMounted) && (
                     <frame
                         key="ContentClip"
                         BackgroundTransparency={1}
                         BorderSizePixel={0}
                         ClipsDescendants
+                        Visible={mounted}
                         Size={height.map((value) => UDim2.fromScale(1, 0).add(UDim2.fromOffset(0, value)))}
                     >
                         <frame
                             key="Content"
+                            ref={contentRef}
                             BackgroundColor3={theme.components.accordion.content.backgroundColor}
                             BackgroundTransparency={theme.components.accordion.content.backgroundTransparency}
                             BorderSizePixel={0}
@@ -245,13 +272,13 @@ function RenderedAccordionItem(props: ParsedItem & { first: boolean; open: boole
     );
 }
 
-type AccordionComponent = React.ForwardRefExoticComponent<AccordionProps & React.RefAttributes<ImageLabel>> & {
+type AccordionComponent = React.ForwardRefExoticComponent<(AccordionProps | AccordionMultipleProps) & React.RefAttributes<ImageLabel>> & {
     Item: typeof AccordionItem;
     Header: typeof AccordionHeader;
     Content: typeof AccordionContent;
 };
 
-const Accordion = React.forwardRef<ImageLabel, AccordionProps>((props, ref) => {
+const Accordion = React.forwardRef<ImageLabel, AccordionProps | AccordionMultipleProps>((props, ref) => {
     const theme = React.useContext(CleanThemeContext);
     const items = React.useMemo(() => {
         const parsed = new Array<ParsedItem>();
@@ -281,13 +308,13 @@ const Accordion = React.forwardRef<ImageLabel, AccordionProps>((props, ref) => {
         return parsed;
     }, [props.children]);
 
-    const initial = props.defaultValue !== undefined ? [props.defaultValue] : [];
-    const [uncontrolled, setUncontrolled] = React.useState(initial);
+    const [uncontrolled, setUncontrolled] = React.useState(() => toValues(props.defaultValue));
     const supplied = props.value !== undefined
-        ? [props.value]
+        ? toValues(props.value)
         : uncontrolled;
     const available = new Set(items.map((item) => item.value));
-    const openValues = supplied.filter((value) => available.has(value));
+    const filtered = supplied.filter((value) => available.has(value));
+    const openValues = props.multiple || filtered.size() <= 1 ? filtered : [filtered[0]];
 
     React.useEffect(() => {
         if (props.value === undefined && (uncontrolled.size() !== openValues.size() || uncontrolled.some((value) => !available.has(value)))) {
@@ -299,21 +326,27 @@ const Accordion = React.forwardRef<ImageLabel, AccordionProps>((props, ref) => {
         if (item.disabled || (item.content === undefined && item.contentText === undefined)) return;
         const isOpen = openValues.includes(item.value);
         let nextValues: string[];
-        if (isOpen) {
+        if (props.multiple) {
+            nextValues = items
+                .map((other) => other.value)
+                .filter((value) => value === item.value ? !isOpen : openValues.includes(value));
+        } else if (isOpen) {
             if (!props.collapsible) return;
             nextValues = [];
         } else {
             nextValues = [item.value];
         }
         if (props.value === undefined) setUncontrolled(nextValues);
-        props.onValueChange?.(nextValues[0]);
+        if (props.multiple) props.onValueChange?.(nextValues);
+        else props.onValueChange?.(nextValues[0]);
     };
 
     return (
         <Container ref={ref}
             name={props.name ?? "Accordion"}
             width="100%"
-            height="100%"
+            height={props.autoSize ? undefined : "100%"}
+            AutomaticSize={props.autoSize ? Enum.AutomaticSize.Y : undefined}
             ClipsDescendants
         >
             <Corners radius={theme.components.accordion.cornerRadius} />
@@ -328,6 +361,7 @@ const Accordion = React.forwardRef<ImageLabel, AccordionProps>((props, ref) => {
                         first={index === 0}
                         open={openValues.includes(item.value)}
                         duration={props.animationDuration ?? theme.components.accordion.animation.duration}
+                        keepMounted={props.keepMounted ?? false}
                         onActivate={() => activate(item)}
                     />
                 ))}

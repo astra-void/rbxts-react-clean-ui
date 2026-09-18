@@ -3,5 +3,14 @@ declare class AccordionMountValidation {
     itemsStackVertically(): void;
     controlledValueSwitches(): void;
     allContained(): void;
+    keepMountedClosed(): void;
+    keepMountedKeepsState(): void;
+    defaultResetsState(): void;
+    fillsHostHeight(): void;
+    autoSizeGrows(): void;
+    multipleDefaultOpen(): void;
+    multipleClosesOne(): void;
+    multipleOpensAnother(): void;
+    reopenWhileClosing(): void;
 }
 export = AccordionMountValidation;

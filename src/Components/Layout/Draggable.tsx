@@ -1,7 +1,7 @@
 import React from "@rbxts/react";
-import { GuiHelper } from "../../Helpers/";
-import { DraggableRegistration, DraggableRegistryKey, DroppableRegistration, DroppableRegistryKey, RegistryContext } from "../../Providers";
-import { CleanThemeContext, DraggableContext, DraggableContextValue, OverlayConsumer } from "../../Contexts";
+import { ElementHelper, GuiHelper } from "../../Helpers/";
+import { DraggableRegistration, DraggableRegistryKey, DroppableRegistration, DroppableRegistryKey, GlobalRegistry, RegistryContext } from "../../Providers";
+import { CleanThemeContext, DragEventInfo, DragStateContext, DragStateContextValue, DraggableContext, DraggableContextValue, OverlayConsumer } from "../../Contexts";
 import { createPortal } from "@rbxts/react-roblox";
 import { Corners } from "../Decorator";
 import { CustomInputService } from "../../Helpers";
@@ -10,9 +10,18 @@ import { CustomInputService } from "../../Helpers";
 type GuiObjectProps = React.InstanceProps<GuiObject>;
 type GuiElement = React.ReactElement<GuiObjectProps>;
 
+const DEFAULT_INPUT_TYPES = [Enum.UserInputType.MouseButton1, Enum.UserInputType.Touch];
+
+const PREVIEW_DRAG_STATE: DragStateContextValue = {
+    preview: true,
+    dragging: true,
+};
 
 interface DragInformation {
+    root: GuiObject;
     input: InputObject;
+    inputType: Enum.UserInputType;
+    keyCode?: Enum.KeyCode;
     inputStart: Vector2;
     positionStart: UDim2;
     absolutePositionStart: Vector2;
@@ -22,28 +31,45 @@ interface DragHandleProps {
     children: GuiElement;
 }
 
-function isInteractiveDescendantAtInput(handle: GuiObject, input: InputObject): boolean {
-    const point = new Vector2(input.Position.X, input.Position.Y);
+function toPoint(input: InputObject): Vector2 {
+    return new Vector2(input.Position.X, input.Position.Y);
+}
 
-    return GuiHelper.getGuiObjectsAtPosition(handle, point).some((guiObject) =>
-        guiObject !== handle &&
-        guiObject.IsDescendantOf(handle) &&
-        (guiObject.IsA("GuiButton") || guiObject.IsA("TextBox")),
+function createDragEventInfo(input: InputObject, dragInformation: DragInformation, id?: string): DragEventInfo {
+    return {
+        inputType: dragInformation.inputType,
+        input,
+        position: toPoint(input),
+        id,
+    };
+}
+
+function isInteractiveDescendantAtInput(handle: GuiObject, input: InputObject): boolean {
+    const point = toPoint(input);
+
+    return handle.GetDescendants().some((descendant) =>
+        (descendant.IsA("GuiButton") || descendant.IsA("TextBox")) &&
+        GuiHelper.isGuiObjectHitAtPoint(descendant, point),
     );
 }
 
 
 function DragHandle({ children }: DragHandleProps) {
     const draggable = React.useContext(DraggableContext);
+    const dragState = React.useContext(DragStateContext);
 
     assert(
         draggable !== undefined,
         "Draggable.Handle must be used inside a Draggable component",
     );
 
-    const childEvents = children.props.Event;
+    const inert = dragState.preview;
 
     React.useEffect(() => {
+        if (inert) {
+            return;
+        }
+
         const inputChangedListener =
             CustomInputService.InputChanged.Connect((input) => {
                 if (
@@ -58,44 +84,27 @@ function DragHandle({ children }: DragHandleProps) {
 
         const inputEndedListener =
             CustomInputService.InputEnded.Connect((input) => {
-                if (
-                    input.UserInputType ===
-                    Enum.UserInputType.MouseButton1 ||
-                    input.UserInputType ===
-                    Enum.UserInputType.Touch
-                ) {
-                    draggable.endDrag(input);
-                }
+                draggable.endDrag(input);
             });
 
         return () => {
             inputChangedListener.Disconnect();
             inputEndedListener.Disconnect();
         };
-    }, [draggable]);
+    }, [draggable, inert]);
 
-    return React.cloneElement(children, {
-        Active: true,
+    if (inert) {
+        return React.cloneElement(children, { Active: true });
+    }
 
-        Event: {
-            ...childEvents,
-
-            InputBegan: (
-                instance: GuiObject,
-                input: InputObject,
-            ) => {
-                childEvents?.InputBegan?.(instance, input);
-
-                if (
-                    (input.UserInputType ===
-                        Enum.UserInputType.MouseButton1 ||
-                        input.UserInputType ===
-                        Enum.UserInputType.Touch) &&
-                    !isInteractiveDescendantAtInput(instance, input)
-                ) {
-                    draggable.beginDrag(input, instance);
-                }
-            },
+    return ElementHelper.cloneWithEvents(children, { Active: true }, {
+        InputBegan: (
+            instance: GuiObject,
+            input: InputObject,
+        ) => {
+            if (!isInteractiveDescendantAtInput(instance, input)) {
+                draggable.beginDrag(input, instance);
+            }
         },
     });
 }
@@ -119,10 +128,12 @@ function Placeholder(props: React.InstanceProps<Frame>) {
     </frame>
 }
 
-interface DraggableProps {
-    onDropped?: (droppable?: DroppableRegistration) => void;
-    onDragged?: (droppable?: DroppableRegistration) => void;
-    onStartDrag?: () => void;
+export interface DraggableProps {
+    onDropped?: (droppable: DroppableRegistration | undefined, info: DragEventInfo) => void;
+    onDragged?: (droppable: DroppableRegistration | undefined, info: DragEventInfo) => void;
+    onStartDrag?: (info: DragEventInfo) => void;
+    inputTypes?: Enum.UserInputType[];
+    renderOverlay?: () => React.ReactNode;
     placeholder?: boolean;
     retainPosition?: boolean;
     children: GuiElement;
@@ -156,46 +167,55 @@ const Draggable = React.forwardRef<Frame, DraggableProps>(
 
         const registry = React.useContext(RegistryContext);
 
+        const parentDragState = React.useContext(DragStateContext);
+
         const rootRef = React.useRef<GuiObject>();
 
         const placeholderRef = React.useRef<Frame>();
 
         const dragInformationRef = React.useRef<DragInformation>();
 
+        const hoveredRef = React.useRef<DroppableRegistration>();
+
+        const idRef = React.useRef<string>();
+        idRef.current = props.id;
+
         const usePlaceholder = props.placeholder ?? true
+
+        const inputTypes = props.inputTypes ?? DEFAULT_INPUT_TYPES;
 
         const registrationRef = React.useRef<DraggableRegistration>();
 
-        const findDroppable = React.useCallback((instance: GuiObject, position: Vector2): DroppableRegistration | undefined => {
+        const findDroppable = React.useCallback((position: Vector2): DroppableRegistration | undefined => {
             let result: DroppableRegistration | undefined;
 
-            GuiHelper.getGuiObjectsAtPosition(instance, position).forEach((guiObject: GuiObject) => {
-                const registryEntry = registry?.get(
-                    guiObject,
-                    DroppableRegistryKey,
-                );
-                if (registryEntry) {
-                    registryEntry?.drop(instance);
+            for (const registryEntry of GlobalRegistry.getAll(DroppableRegistryKey)) {
+                if (!GuiHelper.isGuiObjectHitAtPoint(registryEntry.guiObject, position))
+                    continue;
+
+                if (result === undefined || GuiHelper.isRenderedAbove(registryEntry.guiObject, result.guiObject))
                     result = registryEntry;
-                }
-            })
+            }
 
             return result;
-        }, [registry]);
+        }, []);
 
-        const beginDrag = React.useCallback((input: InputObject, handle: GuiObject): void => {
+        const beginDrag = React.useCallback((input: InputObject): void => {
             const root = rootRef.current
             const registration = registrationRef.current;
 
-            if (root === undefined)
+            if (root === undefined || dragInformationRef.current !== undefined)
                 return;
 
-            const allDraggables = registry?.getAll(
+            if (!inputTypes.includes(input.UserInputType))
+                return;
+
+            const allDraggables = GlobalRegistry.getAll(
                 DraggableRegistryKey,
             );
 
             if (
-                allDraggables?.some(
+                allDraggables.some(
                     (registration) =>
                         registration.draggable.isDragging,
                 )
@@ -206,14 +226,20 @@ const Draggable = React.forwardRef<Frame, DraggableProps>(
                 registration.draggable.isDragging = true;
 
 
-            dragInformationRef.current = {
+            const dragInformation: DragInformation = {
+                root,
                 input,
-                inputStart: new Vector2(input.Position.X, input.Position.Y),
+                inputType: input.UserInputType,
+                keyCode: input.KeyCode,
+                inputStart: toPoint(input),
                 absolutePositionStart: root.AbsolutePosition,
                 positionStart: root.Position,
             };
 
-            props.onStartDrag?.();
+            dragInformationRef.current = dragInformation;
+            hoveredRef.current = undefined;
+
+            props.onStartDrag?.(createDragEventInfo(input, dragInformation, props.id));
 
             setDragging(true);
             setOverlayPosition(root.AbsolutePosition);
@@ -225,7 +251,7 @@ const Draggable = React.forwardRef<Frame, DraggableProps>(
                 ZIndex: root.ZIndex,
             })
 
-        }, [registry, props.onStartDrag]);
+        }, [props.onStartDrag, props.id, inputTypes]);
 
         const updateDrag = React.useCallback((input: InputObject): void => {
             const root = rootRef.current;
@@ -234,19 +260,25 @@ const Draggable = React.forwardRef<Frame, DraggableProps>(
             if (root === undefined || dragInformation === undefined)
                 return;
 
-            const inputPosition = new Vector2(
-                input.Position.X,
-                input.Position.Y,
-            );
+            const inputPosition = toPoint(input);
 
             const delta = inputPosition.sub(dragInformation.inputStart);
 
-            const dropRegisteration: DroppableRegistration | undefined = findDroppable(root, new Vector2(input.Position.X, input.Position.Y));
-            props.onDragged?.(dropRegisteration);
+            const info = createDragEventInfo(input, dragInformation, props.id);
+            const dropRegisteration: DroppableRegistration | undefined = findDroppable(inputPosition);
+            const hovered = hoveredRef.current;
+
+            if (hovered?.guiObject !== dropRegisteration?.guiObject) {
+                hoveredRef.current = dropRegisteration;
+                hovered?.dragLeave?.(root, info);
+                dropRegisteration?.dragEnter?.(root, info);
+            }
+
+            props.onDragged?.(dropRegisteration, info);
 
             setOverlayPosition(dragInformation.absolutePositionStart.add(delta));
 
-        }, [findDroppable, props.onDragged]);
+        }, [findDroppable, props.onDragged, props.id]);
 
         const endDrag = React.useCallback((input: InputObject): void => {
             const root = rootRef.current;
@@ -256,24 +288,32 @@ const Draggable = React.forwardRef<Frame, DraggableProps>(
             if (root === undefined || dragInformation === undefined)
                 return;
 
+            if (
+                input.UserInputType !== dragInformation.inputType ||
+                input.KeyCode !== dragInformation.keyCode
+            )
+                return;
+
             if (registration)
                 registration.draggable.isDragging = false;
 
-            const dropRegisteration: DroppableRegistration | undefined = findDroppable(root, new Vector2(input.Position.X, input.Position.Y))
+            const inputPosition = toPoint(input);
+            const info = createDragEventInfo(input, dragInformation, props.id);
+            const dropRegisteration: DroppableRegistration | undefined = findDroppable(inputPosition);
+            const hovered = hoveredRef.current;
 
             dragInformationRef.current = undefined;
+            hoveredRef.current = undefined;
 
-            props.onDropped?.(dropRegisteration);
+            dropRegisteration?.drop(root, info);
+            hovered?.dragLeave?.(root, info);
+
+            props.onDropped?.(dropRegisteration, info);
 
             if (props.retainPosition) {
                 const parent = root.Parent;
 
                 if (parent?.IsA("GuiObject")) {
-                    const inputPosition = new Vector2(
-                        input.Position.X,
-                        input.Position.Y,
-                    );
-
                     const delta = inputPosition.sub(
                         dragInformation.inputStart,
                     );
@@ -298,10 +338,10 @@ const Draggable = React.forwardRef<Frame, DraggableProps>(
 
             setDragging(false);
 
-        }, [findDroppable, props.onDropped, props.retainPosition]);
+        }, [findDroppable, props.onDropped, props.retainPosition, props.id]);
 
         const contextValue = React.useMemo<DraggableContextValue>(() => ({
-            isDragging: false,
+            isDragging: dragInformationRef.current !== undefined,
             beginDrag,
             updateDrag,
             endDrag,
@@ -311,7 +351,7 @@ const Draggable = React.forwardRef<Frame, DraggableProps>(
         React.useEffect(() => {
             const root = rootRef.current;
 
-            if (registry === undefined || root === undefined) {
+            if (root === undefined || parentDragState.preview) {
                 return;
             }
 
@@ -323,17 +363,30 @@ const Draggable = React.forwardRef<Frame, DraggableProps>(
 
             registrationRef.current = registration;
 
-            registry.register(
+            registry?.register(
+                root,
+                DraggableRegistryKey,
+                registration,
+            );
+
+            GlobalRegistry.register(
                 root,
                 DraggableRegistryKey,
                 registration,
             );
 
             return () => {
-                registry.unregister(
+                registry?.unregister(
                     registration.guiObject,
                     DraggableRegistryKey,
                 );
+
+                if (GlobalRegistry.get(registration.guiObject, DraggableRegistryKey) === registration) {
+                    GlobalRegistry.unregister(
+                        registration.guiObject,
+                        DraggableRegistryKey,
+                    );
+                }
 
                 if (registrationRef.current === registration) {
                     registrationRef.current = undefined;
@@ -343,7 +396,26 @@ const Draggable = React.forwardRef<Frame, DraggableProps>(
             registry,
             props.id,
             contextValue,
+            parentDragState.preview,
         ]);
+
+        React.useEffect(() => {
+            return () => {
+                const dragInformation = dragInformationRef.current;
+                const hovered = hoveredRef.current;
+
+                hoveredRef.current = undefined;
+
+                if (dragInformation !== undefined && hovered !== undefined) {
+                    hovered.dragLeave?.(dragInformation.root, createDragEventInfo(dragInformation.input, dragInformation, idRef.current));
+                }
+            };
+        }, []);
+
+        const dragStateValue = React.useMemo<DragStateContextValue>(() => ({
+            preview: parentDragState.preview,
+            dragging: parentDragState.dragging || dragging,
+        }), [parentDragState.preview, parentDragState.dragging, dragging]);
 
         const original = React.cloneElement(props.children, {
             ref: rootRef,
@@ -368,8 +440,10 @@ const Draggable = React.forwardRef<Frame, DraggableProps>(
 
         return (
             <DraggableContext.Provider value={contextValue}>
-                {usePlaceholder && dragging && placeholder}
-                {original}
+                <DragStateContext.Provider value={dragStateValue}>
+                    {usePlaceholder && dragging && placeholder}
+                    {original}
+                </DragStateContext.Provider>
                 <OverlayConsumer
                     render={(overlay) => {
                         if (
@@ -383,24 +457,42 @@ const Draggable = React.forwardRef<Frame, DraggableProps>(
                                 overlay.AbsolutePosition,
                             );
 
+                        const position = UDim2.fromOffset(
+                            localPosition.X,
+                            localPosition.Y,
+                        );
 
-                        return createPortal(
-                            React.cloneElement(props.children, {
-                                Position: UDim2.fromOffset(
-                                    localPosition.X,
-                                    localPosition.Y,
-                                ),
+                        const size = UDim2.fromOffset(
+                            overlaySize.X,
+                            overlaySize.Y,
+                        );
 
-                                Size: UDim2.fromOffset(
-                                    overlaySize.X,
-                                    overlaySize.Y,
-                                ),
-
+                        const preview = props.renderOverlay !== undefined
+                            ? (
+                                <frame
+                                    key="DragOverlay"
+                                    Position={position}
+                                    Size={size}
+                                    BackgroundTransparency={1}
+                                    BorderSizePixel={0}
+                                    ZIndex={100001}
+                                >
+                                    {props.renderOverlay()}
+                                </frame>
+                            )
+                            : React.cloneElement(props.children, {
+                                Position: position,
+                                Size: size,
                                 AnchorPoint: Vector2.zero,
                                 AutomaticSize: Enum.AutomaticSize.None,
                                 Visible: true,
                                 ZIndex: 100001,
-                            }),
+                            });
+
+                        return createPortal(
+                            <DragStateContext.Provider value={PREVIEW_DRAG_STATE}>
+                                {preview}
+                            </DragStateContext.Provider>,
                             overlay,
                         );
 

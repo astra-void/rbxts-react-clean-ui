@@ -368,6 +368,15 @@ export const WoodenTheme = createTheme({
                 },
             },
         },
+        draggable: {
+            placeholder: {
+                backgroundColor: Color3.fromHex("#3D2712"),
+                backgroundTransparency: 0.35,
+                borderColor: Color3.fromHex("#A16B30"),
+                borderThickness: 2,
+                cornerRadius: 0,
+            },
+        },
         box: {
             borderThickness: 0,
             boxShadow: 0,

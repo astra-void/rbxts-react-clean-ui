@@ -8,14 +8,18 @@
   - `content: React.ReactNode | string` — the popup's content.
   - `children: React.ReactElement<React.InstanceProps<GuiObject>>` — exactly one element that becomes the hover target.
   - `placement?: "Top" | "Bottom" | "Left" | "Right" | "Center"` (default `"Top"`).
+  - `disabled?: boolean` (default `false`) — suppresses showing. If the popup is open it hides (with the normal fade). The rendered child is identical either way: same instances, same `ref` and handlers, no remount, so toggling it mid-drag under a `Draggable.Handle` is safe.
+  - `open?: boolean` — controlled visibility. When set, hover no longer shows or hides the popup; `open` alone decides (still overridden by `disabled`). When `undefined`, the tooltip is hover-driven as before.
 - Because `TooltipProps` extends `BoxProps`, callers may also pass `spacing`, `'border-thickness'`, `'border-color'`, shadow, size, position, background, and z-index props, which style the popup surface itself (not the wrapped child).
-- `Tooltip` clones `children` via `React.cloneElement`, attaching a `ref` and wrapping the child's existing `Event.MouseEnter`/`MouseLeave` handlers — the child's own handlers still run, followed by the tooltip's show/hide logic.
+- `Tooltip` clones `children`, attaching a `ref` and adding `MouseEnter`/`MouseLeave` handlers. The child's own handlers still run first. The child may be a native element (`<frame>`, `<imagebutton>`, ...) or a component that forwards `ref` and `Event` to an instance.
 
 ## Show/hide behavior
 
 - On `MouseEnter`, the tooltip captures the target's current `AbsolutePosition`/`AbsoluteSize` and becomes visible. Because this is recaptured on every show, the popup tracks the target's latest size/position rather than a stale snapshot.
 - On `MouseLeave`, the tooltip becomes invisible immediately, but the popup content stays mounted for `theme.components.tooltip.fadeDuration` seconds (to let the fade-out animation play) before unmounting, unless the tooltip is re-shown in the meantime — a hide request counter ensures a rapid leave/re-enter doesn't cause the popup to unmount and then reappear.
 - If `fadeDuration <= 0`, the popup unmounts immediately on hide with no delay.
+- While visible, the popup follows the target's `AbsolutePosition`/`AbsoluteSize` changes.
+- The tooltip is suppressed (treated as `disabled`) when it is inside a `Draggable`'s drag preview, and while the `Draggable` it sits in is being dragged (see [draggable.md](../layout/draggable.md)). Suppression also forgets the hover state, so after it ends the popup only reappears on the next `MouseEnter` (or when `open` says so).
 - The popup only exists in the tree while a target has been captured at least once; it is portaled into the app-wide overlay frame (via `OverlayConsumer` + `ReactRoblox.createPortal`), so it renders above ordinary sibling content and outside any clipping/`ZIndex` ancestor of the trigger. If no `OverlayProvider` is present, the tooltip never renders (`OverlayConsumer` receives `overlay === undefined`).
 
 ## Placement
@@ -52,3 +56,10 @@ Tooltip defaults live under `theme.components.tooltip`:
 ## Story
 
 A story should demonstrate all five placements (including `Center`) and a tooltip anchored near a screen edge, since the pointer orientation and popup anchoring differ meaningfully by placement and by available space.
+
+## Implementation notes
+
+- Events are injected with `ElementHelper.cloneWithEvents`. A raw `Event` table passed through `React.cloneElement` to a native child is assigned as `instance.Event` and throws, unmounting the root (see draggable.md's notes).
+- `disabled`/`open`/drag suppression are applied in an effect keyed on `[suppressed, open]`, not by changing what is rendered, so the child's element tree never changes. Uncontrolled hover still calls `show()` synchronously in `MouseEnter`, which the Tooltip tests rely on.
+- `shownRef` tracks whether `show()` is in effect so the effect doesn't call `hide()` on mount or re-`show()` an open popup.
+- `hoveredRef` is cleared on suppression because a dragged original is hidden without a `MouseLeave`. Keeping it would re-open the popup at the old position after the drop.

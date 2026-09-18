@@ -1,5 +1,5 @@
 import React from "@rbxts/react";
-import { BackgroundElementProps, IconElementProps, IntentElementProps, ScalableElementProps, ShadowElementProps, SpacedElementProps, ZIndexElementProps } from "../../Interfaces/";
+import { BackgroundElementProps, CssPadding, IconElementProps, IntentElementProps, ScalableElementProps, ShadowElementProps, SpacedElementProps, ZIndexElementProps } from "../../Interfaces/";
 import { IconProps } from "../Surface";
 import { ThemeTemplate } from "../../Theme/theme.template";
 export type ButtonStyleOverride = Partial<ThemeTemplate["components"]["button"]>;
@@ -14,6 +14,7 @@ export interface ButtonProps extends SpacedElementProps, ShadowElementProps, ZIn
     LayoutOrder?: number;
     styleOverride?: ButtonStyleOverride;
     name?: string;
+    padding?: CssPadding;
 }
 export interface ButtonTextProps extends ScalableElementProps, IntentElementProps {
     children?: string;

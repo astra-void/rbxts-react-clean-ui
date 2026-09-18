@@ -15,7 +15,9 @@ local _Layout = TS.import(script, script.Parent.Parent.Parent.Parent, "Component
 local Group = _Layout.Group
 local HStack = _Layout.HStack
 local ThemeProvider = TS.import(script, script.Parent.Parent.Parent.Parent, "Providers", "theme.provider").ThemeProvider
-local WoodenTheme = TS.import(script, script.Parent.Parent.Parent.Parent, "Theme").WoodenTheme
+local _Theme = TS.import(script, script.Parent.Parent.Parent.Parent, "Theme")
+local DefaultTheme = _Theme.DefaultTheme
+local WoodenTheme = _Theme.WoodenTheme
 local _layout = TS.import(script, script.Parent.Parent.Parent, "Helpers", "layout")
 local STUDIO_SKIP_MESSAGE = _layout.STUDIO_SKIP_MESSAGE
 local assertAllDescendantsContained = _layout.assertAllDescendantsContained
@@ -36,6 +38,17 @@ local function waitForButton(host, name)
 		name = "Button"
 	end
 	return waitForGuiObject(host, name)
+end
+local function rootPadding(button)
+	local padding = button:FindFirstChildWhichIsA("UIPadding")
+	Assert:notUndefined(padding, `Expected {button.Name} to have a direct UIPadding child`)
+	return padding
+end
+local function assertSides(padding, top, bottom, left, right, label)
+	Assert:equal(padding.PaddingTop, UDim.new(0, top), `{label}: PaddingTop`)
+	Assert:equal(padding.PaddingBottom, UDim.new(0, bottom), `{label}: PaddingBottom`)
+	Assert:equal(padding.PaddingLeft, UDim.new(0, left), `{label}: PaddingLeft`)
+	Assert:equal(padding.PaddingRight, UDim.new(0, right), `{label}: PaddingRight`)
 end
 local ButtonMountValidation
 do
@@ -140,6 +153,50 @@ do
 			Assert:equal(button.BackgroundTransparency, 1)
 			Assert:equal(findDescendant(button, "Stroke").Thickness, 0)
 			Assert:undefined(button:FindFirstChild("Gradient"))
+		end)
+	end
+	function ButtonMountValidation:paddingQuadSides()
+		withMounted(400, 200, React.createElement(Button, {
+			name = "PaddedButton",
+			text = "Save",
+			padding = "4 12",
+		}), function(mounted)
+			local button = waitForButton(mounted.host, "PaddedButton")
+			assertSides(rootPadding(button), 4, 4, 12, 12, 'padding="4 12"')
+		end)
+	end
+	function ButtonMountValidation:defaultPaddingFromTheme()
+		local expected = DefaultTheme.spacing[DefaultTheme.default.spacing]
+		Assert:notUndefined(expected, "Expected the default theme to define spacing at its default spacing key")
+		withMounted(400, 200, React.createElement(Button, {
+			text = "Save",
+		}), function(mounted)
+			local button = waitForButton(mounted.host)
+			assertSides(rootPadding(button), expected, expected, expected, expected, "no padding prop")
+		end)
+	end
+	function ButtonMountValidation:paddingOverridesNone()
+		withMounted(400, 200, React.createElement(Button, {
+			text = "Save",
+			spacing = "None",
+			padding = "6",
+		}), function(mounted)
+			local button = waitForButton(mounted.host)
+			assertSides(rootPadding(button), 6, 6, 6, 6, 'spacing="None" padding="6"')
+		end)
+	end
+	function ButtonMountValidation:paddingKeepsOrder()
+		withMounted(400, 200, React.createElement(Button, {
+			text = "Save changes",
+			icon = "check",
+			padding = "4 12",
+		}), function(mounted)
+			local button = waitForButton(mounted.host)
+			local icon = waitForGuiObject(button, "ButtonIcon")
+			local label = waitForGuiObject(button, "ButtonText")
+			Assert:equal(icon.LayoutOrder, 1)
+			Assert:equal(label.LayoutOrder, 2)
+			assertStackedHorizontally({ icon, label }, "padded icon + text row")
 		end)
 	end
 	local _decorator = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
@@ -261,6 +318,86 @@ do
 	})
 	if _descriptor_17 then
 		ButtonMountValidation.woodenPrimaryUnchanged = _descriptor_17.value
+	end
+	local _decorator_12 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_13 = DisplayName("A two-value padding quad sets top/bottom from the first value and left/right from the second")
+	local _descriptor_18 = Test(ButtonMountValidation, "paddingQuadSides", {
+		value = ButtonMountValidation.paddingQuadSides,
+	})
+	if _descriptor_18 then
+		ButtonMountValidation.paddingQuadSides = _descriptor_18.value
+	end
+	local _descriptor_19 = _decorator_13(ButtonMountValidation, "paddingQuadSides", {
+		value = ButtonMountValidation.paddingQuadSides,
+	})
+	if _descriptor_19 then
+		ButtonMountValidation.paddingQuadSides = _descriptor_19.value
+	end
+	local _descriptor_20 = _decorator_12(ButtonMountValidation, "paddingQuadSides", {
+		value = ButtonMountValidation.paddingQuadSides,
+	})
+	if _descriptor_20 then
+		ButtonMountValidation.paddingQuadSides = _descriptor_20.value
+	end
+	local _decorator_14 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_15 = DisplayName("Without padding every side uses the theme spacing at the default spacing key")
+	local _descriptor_21 = Test(ButtonMountValidation, "defaultPaddingFromTheme", {
+		value = ButtonMountValidation.defaultPaddingFromTheme,
+	})
+	if _descriptor_21 then
+		ButtonMountValidation.defaultPaddingFromTheme = _descriptor_21.value
+	end
+	local _descriptor_22 = _decorator_15(ButtonMountValidation, "defaultPaddingFromTheme", {
+		value = ButtonMountValidation.defaultPaddingFromTheme,
+	})
+	if _descriptor_22 then
+		ButtonMountValidation.defaultPaddingFromTheme = _descriptor_22.value
+	end
+	local _descriptor_23 = _decorator_14(ButtonMountValidation, "defaultPaddingFromTheme", {
+		value = ButtonMountValidation.defaultPaddingFromTheme,
+	})
+	if _descriptor_23 then
+		ButtonMountValidation.defaultPaddingFromTheme = _descriptor_23.value
+	end
+	local _decorator_16 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_17 = DisplayName("spacing None does not zero an explicit single-value padding, which applies to all four sides")
+	local _descriptor_24 = Test(ButtonMountValidation, "paddingOverridesNone", {
+		value = ButtonMountValidation.paddingOverridesNone,
+	})
+	if _descriptor_24 then
+		ButtonMountValidation.paddingOverridesNone = _descriptor_24.value
+	end
+	local _descriptor_25 = _decorator_17(ButtonMountValidation, "paddingOverridesNone", {
+		value = ButtonMountValidation.paddingOverridesNone,
+	})
+	if _descriptor_25 then
+		ButtonMountValidation.paddingOverridesNone = _descriptor_25.value
+	end
+	local _descriptor_26 = _decorator_16(ButtonMountValidation, "paddingOverridesNone", {
+		value = ButtonMountValidation.paddingOverridesNone,
+	})
+	if _descriptor_26 then
+		ButtonMountValidation.paddingOverridesNone = _descriptor_26.value
+	end
+	local _decorator_18 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_19 = DisplayName("With padding set the icon keeps LayoutOrder 1 and the label LayoutOrder 2, laid out left to right")
+	local _descriptor_27 = Test(ButtonMountValidation, "paddingKeepsOrder", {
+		value = ButtonMountValidation.paddingKeepsOrder,
+	})
+	if _descriptor_27 then
+		ButtonMountValidation.paddingKeepsOrder = _descriptor_27.value
+	end
+	local _descriptor_28 = _decorator_19(ButtonMountValidation, "paddingKeepsOrder", {
+		value = ButtonMountValidation.paddingKeepsOrder,
+	})
+	if _descriptor_28 then
+		ButtonMountValidation.paddingKeepsOrder = _descriptor_28.value
+	end
+	local _descriptor_29 = _decorator_18(ButtonMountValidation, "paddingKeepsOrder", {
+		value = ButtonMountValidation.paddingKeepsOrder,
+	})
+	if _descriptor_29 then
+		ButtonMountValidation.paddingKeepsOrder = _descriptor_29.value
 	end
 	ButtonMountValidation = Tag("Studio")(ButtonMountValidation) or ButtonMountValidation
 end

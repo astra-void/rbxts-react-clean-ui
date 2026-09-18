@@ -82,8 +82,8 @@ export const Text = React.forwardRef<TextLabel, TextProps>(
         return <textlabel
             key={props.name ?? "Text"}
             ref={ref}
-            Size={UDim2.fromScale(0, 0)}
-            AutomaticSize={Enum.AutomaticSize.XY}
+            Size={props.Size ?? UDim2.fromScale(0, 0)}
+            AutomaticSize={props.AutomaticSize ?? Enum.AutomaticSize.XY}
             AnchorPoint={props.AnchorPoint}
             LineHeight={props.LineHeight ?? style.lineHeight}
             BackgroundTransparency={props.BackgroundTransparency ?? 1}

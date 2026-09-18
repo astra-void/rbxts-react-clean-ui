@@ -24,6 +24,7 @@ local RegistryContext = _registry_provider.RegistryContext
 local RegistryProvider = _registry_provider.RegistryProvider
 local ThemeProvider = TS.import(script, script.Parent.Parent.Parent.Parent, "Providers", "theme.provider").ThemeProvider
 local DefaultTheme = TS.import(script, script.Parent.Parent.Parent.Parent, "Theme").DefaultTheme
+local pointerInput = TS.import(script, script.Parent.Parent.Parent, "Helpers", "drag").pointerInput
 local latestRegistry
 local function RegistryHarness()
 	latestRegistry = React.useContext(RegistryContext)
@@ -201,12 +202,8 @@ do
 		Assert["true"](Assert, header.Active)
 		Assert:equal(registration.guiObject.AnchorPoint, Vector2.new(0.5, 0.5))
 		Assert:equal(registration.guiObject.Position, UDim2.fromScale(0.5, 0.5))
-		local dragStart = {
-			Position = Vector3.new(10, 20, 0),
-		}
-		local dragEnd = {
-			Position = Vector3.new(40, 60, 0),
-		}
+		local dragStart = pointerInput(Vector2.new(10, 20))
+		local dragEnd = pointerInput(Vector2.new(40, 60))
 		registration.draggable.beginDrag(dragStart, header)
 		registration.draggable.endDrag(dragEnd)
 		waitForCondition(function()

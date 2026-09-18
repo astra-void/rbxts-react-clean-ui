@@ -1,12 +1,14 @@
 import React from "@rbxts/react";
-import { DraggableContextValue } from "../Contexts";
-export interface RegistryKey<T extends defined> {
+import { DragEventInfo, DraggableContextValue } from "../Contexts";
+export interface RegistryKey<_T extends defined> {
     readonly name: string;
 }
 export interface DroppableRegistration {
     guiObject: GuiObject;
     id?: string;
-    drop: (draggedObject: GuiObject) => void;
+    drop: (draggedObject: GuiObject, info?: DragEventInfo) => void;
+    dragEnter?: (draggedObject: GuiObject, info: DragEventInfo) => void;
+    dragLeave?: (draggedObject: GuiObject, info: DragEventInfo) => void;
 }
 export declare const DroppableRegistryKey: RegistryKey<DroppableRegistration>;
 export interface DraggableRegistration {
@@ -26,6 +28,8 @@ export declare const RegistryContext: React.Context<RegistryContextValue | undef
 export interface RegistryProviderProps {
     children?: React.ReactNode;
 }
+export declare function createRegistry(): RegistryContextValue;
+export declare const GlobalRegistry: RegistryContextValue;
 export declare function RegistryProvider(props: RegistryProviderProps): React.JSX.Element;
 export declare function useRegistryRegistration<T extends defined>(key: RegistryKey<T>, createRegistration: (guiObject: GuiObject) => T, dependencies: React.DependencyList): {
     ref: React.Dispatch<React.SetStateAction<GuiObject | undefined>>;

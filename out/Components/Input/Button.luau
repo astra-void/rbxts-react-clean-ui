@@ -94,6 +94,7 @@ local function ButtonIcon(props)
 	_attributes.icon = props.icon
 	_attributes.spinning = props.spinning
 	_attributes.speed = props.speed
+	_attributes.LayoutOrder = props.LayoutOrder
 	local _exp = props.intent
 	local _exp_1 = if props.disabled then "disabled" else "default"
 	local _exp_2 = theme.components.button.intents

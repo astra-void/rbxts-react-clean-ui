@@ -1,9 +1,9 @@
 import React from "@rbxts/react";
-import { CleanThemeContext, OverlayConsumer } from "../../Contexts";
+import { CleanThemeContext, DragStateContext, OverlayConsumer } from "../../Contexts";
 import { Text } from "../Typography";
 import ReactRoblox from "@rbxts/react-roblox";
 import { BoxShadow, Corners, Padding } from "../Decorator";
-import { ColorHelper, CssHelper, SpacingHelper } from "../../Helpers";
+import { ColorHelper, CssHelper, ElementHelper, SpacingHelper } from "../../Helpers";
 import { IntentElementProps, PaddingProps } from "../../Interfaces";
 import { BoxProps } from "../Surface";
 import { useTween } from "@rbxts/react-ripple";
@@ -35,14 +35,14 @@ function TooltipPopup(props: TooltipPopup) {
         transparencyTween.setGoal(props.visible ? 0 : 1);
     }, [props.visible, transparencyTween]);
 
-    let resolvedPadding = {
+    const resolvedPadding = {
         top: 0,
         bottom: 0,
         left: 0,
         right: 0
     }
 
-    const shadow = theme.components.tooltip.boxShadow ? CssHelper.parseCssShadow(theme.components.tooltip.boxShadow) : undefined;
+    const shadow = theme.components.tooltip.boxShadow !== undefined && theme.components.tooltip.boxShadow !== 0 ? CssHelper.parseCssShadow(theme.components.tooltip.boxShadow) : undefined;
     if (shadow !== undefined) {
         resolvedPadding.top += shadow.blurRadius.Offset + shadow.spread.Y.Offset - shadow.offset.Y.Offset;
         resolvedPadding.bottom += shadow.blurRadius.Offset + shadow.spread.Y.Offset + shadow.offset.Y.Offset;
@@ -178,6 +178,8 @@ interface TooltipProps extends BoxProps, IntentElementProps {
     content: React.ReactNode | string;
     children: React.ReactElement<React.InstanceProps<GuiObject>>;
     placement?: TooltipPlacement;
+    disabled?: boolean;
+    open?: boolean;
 }
 
 
@@ -186,24 +188,42 @@ export function Tooltip(props: TooltipProps) {
 
     const hideRequest = React.useRef(0);
 
+    const hoveredRef = React.useRef(false);
+    const shownRef = React.useRef(false);
+
     const [target, setTarget] = React.useState<TooltipTarget>();
     const [visible, setVisible] = React.useState(false);
 
     const theme = React.useContext(CleanThemeContext);
+    const dragState = React.useContext(DragStateContext);
     const fadeDuration = theme.components.tooltip.fadeDuration;
 
-    const show = () => {
-        hideRequest.current += 1;
+    const suppressed = props.disabled === true || dragState.preview || dragState.dragging;
+    const suppressedRef = React.useRef(suppressed);
+    suppressedRef.current = suppressed;
 
+    const controlled = props.open !== undefined;
+    const controlledRef = React.useRef(controlled);
+    controlledRef.current = controlled;
+
+    const captureTarget = () => {
         if (targetRef.current?.AbsolutePosition)
             setTarget({
                 position: targetRef.current?.AbsolutePosition,
                 size: targetRef.current?.AbsoluteSize,
             })
+    };
+
+    const show = () => {
+        shownRef.current = true;
+        hideRequest.current += 1;
+
+        captureTarget();
         setVisible(true);
     };
 
     const hide = () => {
+        shownRef.current = false;
         setVisible(false);
 
         const request = hideRequest.current + 1;
@@ -221,25 +241,51 @@ export function Tooltip(props: TooltipProps) {
         });
     };
 
+    React.useEffect(() => {
+        if (suppressed) {
+            hoveredRef.current = false;
+        }
 
+        const wanted = !suppressed && (props.open ?? hoveredRef.current);
 
-    const child = React.cloneElement(props.children, {
-        ref: targetRef,
+        if (wanted && !shownRef.current) {
+            show();
+        } else if (!wanted && shownRef.current) {
+            hide();
+        }
+    }, [suppressed, props.open]);
 
-        Event: {
-            ...props.children.props.Event,
+    React.useEffect(() => {
+        const instance = targetRef.current;
 
-            MouseEnter: (guiObject: GuiObject, x: number, y: number) => {
-                props.children.props.Event?.MouseEnter?.(guiObject, x, y);
+        if (!visible || instance === undefined) {
+            return;
+        }
+
+        const positionChanged = instance.GetPropertyChangedSignal("AbsolutePosition").Connect(captureTarget);
+        const sizeChanged = instance.GetPropertyChangedSignal("AbsoluteSize").Connect(captureTarget);
+
+        return () => {
+            positionChanged.Disconnect();
+            sizeChanged.Disconnect();
+        };
+    }, [visible]);
+
+    const child = ElementHelper.cloneWithEvents(props.children, { ref: targetRef }, {
+        MouseEnter: () => {
+            hoveredRef.current = true;
+
+            if (!controlledRef.current && !suppressedRef.current) {
                 show();
-            },
+            }
+        },
 
-            MouseLeave: (guiObject: GuiObject, x: number, y: number) => {
-                props.children.props.Event?.MouseLeave?.(guiObject, x, y);
+        MouseLeave: () => {
+            hoveredRef.current = false;
 
+            if (!controlledRef.current) {
                 hide();
-
-            },
+            }
         },
     });
 

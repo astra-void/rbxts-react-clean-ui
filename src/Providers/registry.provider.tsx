@@ -1,8 +1,8 @@
 import React from "@rbxts/react";
-import { DraggableContextValue } from "../Contexts";
+import { DragEventInfo, DraggableContextValue } from "../Contexts";
 import { HttpService } from "@rbxts/services";
 
-export interface RegistryKey<T extends defined> {
+export interface RegistryKey<_T extends defined> {
     readonly name: string;
 }
 
@@ -10,7 +10,9 @@ export interface RegistryKey<T extends defined> {
 export interface DroppableRegistration {
     guiObject: GuiObject;
     id?: string;
-    drop: (draggedObject: GuiObject) => void;
+    drop: (draggedObject: GuiObject, info?: DragEventInfo) => void;
+    dragEnter?: (draggedObject: GuiObject, info: DragEventInfo) => void;
+    dragLeave?: (draggedObject: GuiObject, info: DragEventInfo) => void;
 }
 
 export const DroppableRegistryKey: RegistryKey<DroppableRegistration> = {
@@ -58,21 +60,19 @@ export interface RegistryProviderProps {
     children?: React.ReactNode;
 }
 
-export function RegistryProvider(props: RegistryProviderProps) {
-    const entries = React.useRef(
-        new Map<string, Map<GuiObject, unknown>>(),
-    );
+export function createRegistry(): RegistryContextValue {
+    const entries = new Map<string, Map<GuiObject, unknown>>();
 
     const register = <T extends defined>(
         guiObject: GuiObject,
         key: RegistryKey<T>,
         value: T,
     ): void => {
-        let keyEntries = entries.current.get(key.name);
+        let keyEntries = entries.get(key.name);
 
         if (keyEntries === undefined) {
             keyEntries = new Map<GuiObject, unknown>();
-            entries.current.set(key.name, keyEntries);
+            entries.set(key.name, keyEntries);
         }
 
         keyEntries.set(guiObject, value);
@@ -82,7 +82,7 @@ export function RegistryProvider(props: RegistryProviderProps) {
         guiObject: GuiObject,
         key: RegistryKey<T>,
     ): void => {
-        const keyEntries = entries.current.get(key.name);
+        const keyEntries = entries.get(key.name);
 
         if (keyEntries === undefined) {
             return;
@@ -91,7 +91,7 @@ export function RegistryProvider(props: RegistryProviderProps) {
         keyEntries.delete(guiObject);
 
         if (keyEntries.size() === 0) {
-            entries.current.delete(key.name);
+            entries.delete(key.name);
         }
     };
 
@@ -99,7 +99,7 @@ export function RegistryProvider(props: RegistryProviderProps) {
         guiObject: GuiObject,
         key: RegistryKey<T>,
     ): T | undefined => {
-        return entries.current
+        return entries
             .get(key.name)
             ?.get(guiObject) as T | undefined;
     };
@@ -107,7 +107,7 @@ export function RegistryProvider(props: RegistryProviderProps) {
     const getAll = <T extends defined>(
         key: RegistryKey<T>,
     ): T[] => {
-        const keyEntries = entries.current.get(key.name);
+        const keyEntries = entries.get(key.name);
 
         if (keyEntries === undefined) {
             return [];
@@ -126,13 +126,19 @@ export function RegistryProvider(props: RegistryProviderProps) {
         return HttpService.GenerateGUID(false);
     }
 
-    const contextValue: RegistryContextValue = {
+    return {
         register,
         unregister,
         get,
         getAll,
         GetNextId
     };
+}
+
+export const GlobalRegistry: RegistryContextValue = createRegistry();
+
+export function RegistryProvider(props: RegistryProviderProps) {
+    const [contextValue] = React.useState<RegistryContextValue>(createRegistry);
 
     return (
         <RegistryContext.Provider value={contextValue}>

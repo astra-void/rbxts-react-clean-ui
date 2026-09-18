@@ -16,6 +16,7 @@ local ThemeProvider = TS.import(script, script.Parent.Parent.Parent.Parent, "Pro
 local _Theme = TS.import(script, script.Parent.Parent.Parent.Parent, "Theme")
 local DefaultTheme = _Theme.DefaultTheme
 local extendTheme = _Theme.extendTheme
+local activateButton = TS.import(script, script.Parent.Parent.Parent, "Helpers", "fiber").activateButton
 local _layout = TS.import(script, script.Parent.Parent.Parent, "Helpers", "layout")
 local STUDIO_SKIP_MESSAGE = _layout.STUDIO_SKIP_MESSAGE
 local assertAllDescendantsContained = _layout.assertAllDescendantsContained
@@ -54,7 +55,9 @@ local function tabsFixture(props)
 	}), React.createElement(Tabs.Title, {
 		value = "three",
 		text = "Three",
-	})), React.createElement(Tabs.Body, nil, React.createElement(Tabs.Content, {
+	})), React.createElement(Tabs.Body, {
+		LayoutOrder = props.bodyLayoutOrder,
+	}, React.createElement(Tabs.Content, {
 		value = "one",
 	}, React.createElement(Text, {
 		text = "Panel one",
@@ -130,41 +133,6 @@ local function assertOnlySelectedVisible(host, selected)
 end
 local function waitForButton(host, value)
 	return waitForGuiObject(host, `TabButton-{value}`)
-end
-local function findHostFiber(mounted, instance)
-	local internalRoot = (mounted.root)._internalRoot
-	local pending = { internalRoot.current }
-	while #pending > 0 do
-		-- ▼ Array.pop ▼
-		local _length = #pending
-		local _result = pending[_length]
-		pending[_length] = nil
-		-- ▲ Array.pop ▲
-		local fiber = _result
-		if fiber.stateNode == instance then
-			return fiber
-		end
-		if fiber.child ~= nil then
-			local _child = fiber.child
-			table.insert(pending, _child)
-		end
-		if fiber.sibling ~= nil then
-			local _sibling = fiber.sibling
-			table.insert(pending, _sibling)
-		end
-	end
-	return Assert:fail(`Expected a mounted host fiber for {instance:GetFullName()}`)
-end
-local function activateButton(mounted, button)
-	local activatedKey = React.Event.Activated
-	local _result = findHostFiber(mounted, button).memoizedProps
-	if _result ~= nil then
-		_result = _result[activatedKey]
-	end
-	local handler = _result
-	Assert:notUndefined(handler, `Expected {button.Name} to have an Activated handler`)
-	handler(button, {}, 1)
-	task.wait()
 end
 local function settleFrames(count)
 	do
@@ -543,6 +511,23 @@ do
 			waitForLayout(function()
 				return if body:FindFirstChild("Stroke") == nil then true else nil
 			end, "Timed out waiting for TabsBody to drop its Stroke with borderThickness 0")
+		end)
+	end
+	function TabsMountValidation:bodyLayoutOrder()
+		withMounted(400, 300, tabsFixture({
+			defaultValue = "one",
+			bodyLayoutOrder = 5,
+		}), function(mounted)
+			waitForSelectedContent(mounted.host, "one")
+			Assert:equal(findDescendant(mounted.host, "TabsBody").LayoutOrder, 5)
+		end)
+	end
+	function TabsMountValidation:bodyLayoutOrderDefault()
+		withMounted(400, 300, tabsFixture({
+			defaultValue = "one",
+		}), function(mounted)
+			waitForSelectedContent(mounted.host, "one")
+			Assert:equal(findDescendant(mounted.host, "TabsBody").LayoutOrder, 0)
 		end)
 	end
 	local _decorator = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
@@ -944,6 +929,46 @@ do
 	})
 	if _descriptor_59 then
 		TabsMountValidation.bodyStrokeGated = _descriptor_59.value
+	end
+	local _decorator_40 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_41 = DisplayName("A LayoutOrder passed to Tabs.Body lands on the TabsBody ImageLabel")
+	local _descriptor_60 = Test(TabsMountValidation, "bodyLayoutOrder", {
+		value = TabsMountValidation.bodyLayoutOrder,
+	})
+	if _descriptor_60 then
+		TabsMountValidation.bodyLayoutOrder = _descriptor_60.value
+	end
+	local _descriptor_61 = _decorator_41(TabsMountValidation, "bodyLayoutOrder", {
+		value = TabsMountValidation.bodyLayoutOrder,
+	})
+	if _descriptor_61 then
+		TabsMountValidation.bodyLayoutOrder = _descriptor_61.value
+	end
+	local _descriptor_62 = _decorator_40(TabsMountValidation, "bodyLayoutOrder", {
+		value = TabsMountValidation.bodyLayoutOrder,
+	})
+	if _descriptor_62 then
+		TabsMountValidation.bodyLayoutOrder = _descriptor_62.value
+	end
+	local _decorator_42 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_43 = DisplayName("Without a LayoutOrder prop TabsBody keeps the engine default of 0")
+	local _descriptor_63 = Test(TabsMountValidation, "bodyLayoutOrderDefault", {
+		value = TabsMountValidation.bodyLayoutOrderDefault,
+	})
+	if _descriptor_63 then
+		TabsMountValidation.bodyLayoutOrderDefault = _descriptor_63.value
+	end
+	local _descriptor_64 = _decorator_43(TabsMountValidation, "bodyLayoutOrderDefault", {
+		value = TabsMountValidation.bodyLayoutOrderDefault,
+	})
+	if _descriptor_64 then
+		TabsMountValidation.bodyLayoutOrderDefault = _descriptor_64.value
+	end
+	local _descriptor_65 = _decorator_42(TabsMountValidation, "bodyLayoutOrderDefault", {
+		value = TabsMountValidation.bodyLayoutOrderDefault,
+	})
+	if _descriptor_65 then
+		TabsMountValidation.bodyLayoutOrderDefault = _descriptor_65.value
 	end
 	TabsMountValidation = Tag("Studio")(TabsMountValidation) or TabsMountValidation
 end

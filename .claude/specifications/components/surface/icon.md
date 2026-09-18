@@ -16,7 +16,7 @@
 ## Spinning
 
 - When `spinning` is true, `Icon` renders a `SpinningIcon` wrapper instead: an invisible auto-sized `frame` containing the same `Icon` element with `Rotation` bound to an infinitely-repeating linear tween from `0` to `360` degrees over `speed` seconds (default `1`).
-- All props, including native `ImageLabel` props, are forwarded through to the inner `Icon` when spinning.
+- When spinning, only `Size`, `color`, `icon`, and `scale` reach the inner rotating `Icon`; `name` and `LayoutOrder` go on the outer `frame` (so a spinning icon keeps its place in a parent list layout); other native `ImageLabel` props are not forwarded.
 - The tween's `setGoal(360)`/`start()` call runs in an effect with no dependency array, so it re-runs on every render of `SpinningIcon`, not only on mount — this is a real implementation detail to preserve (or flag) rather than an assumed one-time setup.
 - An explicit `Rotation` prop is not meaningful together with `spinning` — the spinning wrapper's own tweened rotation binding takes over the `Rotation` value regardless of any `Rotation` passed in.
 

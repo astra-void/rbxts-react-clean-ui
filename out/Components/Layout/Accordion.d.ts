@@ -17,16 +17,27 @@ interface AccordionContentProps extends PaddingProps {
     text?: string;
 }
 declare function AccordionContent(_props: AccordionContentProps): undefined;
-export interface AccordionProps extends ScalableElementProps {
+interface AccordionBaseProps extends ScalableElementProps {
     children?: React.ReactNode;
     collapsible?: boolean;
     animationDuration?: number;
+    autoSize?: boolean;
+    keepMounted?: boolean;
+    name?: string;
+}
+export interface AccordionProps extends AccordionBaseProps {
+    multiple?: false;
     defaultValue?: string;
     value?: string;
     onValueChange?: (value: string | undefined) => void;
-    name?: string;
 }
-type AccordionComponent = React.ForwardRefExoticComponent<AccordionProps & React.RefAttributes<ImageLabel>> & {
+export interface AccordionMultipleProps extends AccordionBaseProps {
+    multiple: true;
+    defaultValue?: string[];
+    value?: string[];
+    onValueChange?: (value: string[]) => void;
+}
+type AccordionComponent = React.ForwardRefExoticComponent<(AccordionProps | AccordionMultipleProps) & React.RefAttributes<ImageLabel>> & {
     Item: typeof AccordionItem;
     Header: typeof AccordionHeader;
     Content: typeof AccordionContent;

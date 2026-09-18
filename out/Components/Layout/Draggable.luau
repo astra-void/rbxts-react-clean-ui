@@ -1,25 +1,45 @@
 -- Compiled with roblox-ts v3.0.0
 local TS = _G[script]
 local React = TS.import(script, TS.getModule(script, "@rbxts", "react"))
-local GuiHelper = TS.import(script, script.Parent.Parent.Parent, "Helpers").GuiHelper
+local _ = TS.import(script, script.Parent.Parent.Parent, "Helpers")
+local ElementHelper = _.ElementHelper
+local GuiHelper = _.GuiHelper
 local _Providers = TS.import(script, script.Parent.Parent.Parent, "Providers")
 local DraggableRegistryKey = _Providers.DraggableRegistryKey
 local DroppableRegistryKey = _Providers.DroppableRegistryKey
+local GlobalRegistry = _Providers.GlobalRegistry
 local RegistryContext = _Providers.RegistryContext
 local _Contexts = TS.import(script, script.Parent.Parent.Parent, "Contexts")
 local CleanThemeContext = _Contexts.CleanThemeContext
+local DragStateContext = _Contexts.DragStateContext
 local DraggableContext = _Contexts.DraggableContext
 local OverlayConsumer = _Contexts.OverlayConsumer
 local createPortal = TS.import(script, TS.getModule(script, "@rbxts", "react-roblox")).createPortal
 local Corners = TS.import(script, script.Parent.Parent, "Decorator").Corners
 local CustomInputService = TS.import(script, script.Parent.Parent.Parent, "Helpers").CustomInputService
+local DEFAULT_INPUT_TYPES = { Enum.UserInputType.MouseButton1, Enum.UserInputType.Touch }
+local PREVIEW_DRAG_STATE = {
+	preview = true,
+	dragging = true,
+}
+local function toPoint(input)
+	return Vector2.new(input.Position.X, input.Position.Y)
+end
+local function createDragEventInfo(input, dragInformation, id)
+	return {
+		inputType = dragInformation.inputType,
+		input = input,
+		position = toPoint(input),
+		id = id,
+	}
+end
 local function isInteractiveDescendantAtInput(handle, input)
-	local point = Vector2.new(input.Position.X, input.Position.Y)
-	local _exp = GuiHelper:getGuiObjectsAtPosition(handle, point)
+	local point = toPoint(input)
+	local _exp = handle:GetDescendants()
 	-- ▼ ReadonlyArray.some ▼
 	local _result = false
-	local _callback = function(guiObject)
-		return guiObject ~= handle and guiObject:IsDescendantOf(handle) and (guiObject:IsA("GuiButton") or guiObject:IsA("TextBox"))
+	local _callback = function(descendant)
+		return (descendant:IsA("GuiButton") or descendant:IsA("TextBox")) and GuiHelper:isGuiObjectHitAtPoint(descendant, point)
 	end
 	for _k, _v in _exp do
 		if _callback(_v, _k - 1, _exp) then
@@ -33,49 +53,41 @@ end
 local function DragHandle(_param)
 	local children = _param.children
 	local draggable = React.useContext(DraggableContext)
+	local dragState = React.useContext(DragStateContext)
 	local _arg0 = draggable ~= nil
 	assert(_arg0, "Draggable.Handle must be used inside a Draggable component")
-	local childEvents = children.props.Event
+	local inert = dragState.preview
 	React.useEffect(function()
+		if inert then
+			return nil
+		end
 		local inputChangedListener = CustomInputService.InputChanged:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				draggable.updateDrag(input)
 			end
 		end)
 		local inputEndedListener = CustomInputService.InputEnded:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-				draggable.endDrag(input)
-			end
+			draggable.endDrag(input)
 		end)
 		return function()
 			inputChangedListener:Disconnect()
 			inputEndedListener:Disconnect()
 		end
-	end, { draggable })
-	local _object = {
+	end, { draggable, inert })
+	if inert then
+		return React.cloneElement(children, {
+			Active = true,
+		})
+	end
+	return ElementHelper:cloneWithEvents(children, {
 		Active = true,
-	}
-	local _left = "Event"
-	local _object_1 = {}
-	if childEvents then
-		for _k, _v in childEvents do
-			_object_1[_k] = _v
-		end
-	end
-	_object_1.InputBegan = function(instance, input)
-		local _result = childEvents
-		if _result ~= nil then
-			_result = _result.InputBegan
-			if _result ~= nil then
-				_result(instance, input)
+	}, {
+		InputBegan = function(instance, input)
+			if not isInteractiveDescendantAtInput(instance, input) then
+				draggable.beginDrag(input, instance)
 			end
-		end
-		if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not isInteractiveDescendantAtInput(instance, input) then
-			draggable.beginDrag(input, instance)
-		end
-	end
-	_object[_left] = _object_1
-	return React.cloneElement(children, _object)
+		end,
+	})
 end
 local function Placeholder(props)
 	local theme = React.useContext(CleanThemeContext)
@@ -108,81 +120,75 @@ local Draggable = React.forwardRef(function(props, _ref)
 		ZIndex = 1,
 	})
 	local registry = React.useContext(RegistryContext)
+	local parentDragState = React.useContext(DragStateContext)
 	local rootRef = React.useRef()
 	local placeholderRef = React.useRef()
 	local dragInformationRef = React.useRef()
+	local hoveredRef = React.useRef()
+	local idRef = React.useRef()
+	idRef.current = props.id
 	local _condition = props.placeholder
 	if _condition == nil then
 		_condition = true
 	end
 	local usePlaceholder = _condition
+	local inputTypes = props.inputTypes or DEFAULT_INPUT_TYPES
 	local registrationRef = React.useRef()
-	local findDroppable = React.useCallback(function(instance, position)
+	local findDroppable = React.useCallback(function(position)
 		local result
-		local _exp = GuiHelper:getGuiObjectsAtPosition(instance, position)
-		-- ▼ ReadonlyArray.forEach ▼
-		local _callback = function(guiObject)
-			local _registryEntry = registry
-			if _registryEntry ~= nil then
-				_registryEntry = _registryEntry.get(guiObject, DroppableRegistryKey)
+		for _1, registryEntry in GlobalRegistry.getAll(DroppableRegistryKey) do
+			if not GuiHelper:isGuiObjectHitAtPoint(registryEntry.guiObject, position) then
+				continue
 			end
-			local registryEntry = _registryEntry
-			if registryEntry then
-				local _result = registryEntry
-				if _result ~= nil then
-					_result.drop(instance)
-				end
+			if result == nil or GuiHelper:isRenderedAbove(registryEntry.guiObject, result.guiObject) then
 				result = registryEntry
 			end
 		end
-		for _k, _v in _exp do
-			_callback(_v, _k - 1, _exp)
-		end
-		-- ▲ ReadonlyArray.forEach ▲
 		return result
-	end, { registry })
-	local beginDrag = React.useCallback(function(input, handle)
+	end, {})
+	local beginDrag = React.useCallback(function(input)
 		local root = rootRef.current
 		local registration = registrationRef.current
-		if root == nil then
+		if root == nil or dragInformationRef.current ~= nil then
 			return nil
 		end
-		local _allDraggables = registry
-		if _allDraggables ~= nil then
-			_allDraggables = _allDraggables.getAll(DraggableRegistryKey)
+		local _userInputType = input.UserInputType
+		if not (table.find(inputTypes, _userInputType) ~= nil) then
+			return nil
 		end
-		local allDraggables = _allDraggables
-		local _result = allDraggables
-		if _result ~= nil then
-			-- ▼ ReadonlyArray.some ▼
-			local _result_1 = false
-			local _callback = function(registration)
-				return registration.draggable.isDragging
-			end
-			for _k, _v in _result do
-				if _callback(_v, _k - 1, _result) then
-					_result_1 = true
-					break
-				end
-			end
-			-- ▲ ReadonlyArray.some ▲
-			_result = _result_1
+		local allDraggables = GlobalRegistry.getAll(DraggableRegistryKey)
+		-- ▼ ReadonlyArray.some ▼
+		local _result = false
+		local _callback = function(registration)
+			return registration.draggable.isDragging
 		end
+		for _k, _v in allDraggables do
+			if _callback(_v, _k - 1, allDraggables) then
+				_result = true
+				break
+			end
+		end
+		-- ▲ ReadonlyArray.some ▲
 		if _result then
 			return nil
 		end
 		if registration ~= nil then
 			registration.draggable.isDragging = true
 		end
-		dragInformationRef.current = {
+		local dragInformation = {
+			root = root,
 			input = input,
-			inputStart = Vector2.new(input.Position.X, input.Position.Y),
+			inputType = input.UserInputType,
+			keyCode = input.KeyCode,
+			inputStart = toPoint(input),
 			absolutePositionStart = root.AbsolutePosition,
 			positionStart = root.Position,
 		}
+		dragInformationRef.current = dragInformation
+		hoveredRef.current = nil
 		local _result_1 = props.onStartDrag
 		if _result_1 ~= nil then
-			_result_1()
+			_result_1(createDragEventInfo(input, dragInformation, props.id))
 		end
 		setDragging(true)
 		setOverlayPosition(root.AbsolutePosition)
@@ -193,23 +199,50 @@ local Draggable = React.forwardRef(function(props, _ref)
 			LayoutOrder = root.LayoutOrder,
 			ZIndex = root.ZIndex,
 		})
-	end, { registry, props.onStartDrag })
+	end, { props.onStartDrag, props.id, inputTypes })
 	local updateDrag = React.useCallback(function(input)
 		local root = rootRef.current
 		local dragInformation = dragInformationRef.current
 		if root == nil or dragInformation == nil then
 			return nil
 		end
-		local inputPosition = Vector2.new(input.Position.X, input.Position.Y)
+		local inputPosition = toPoint(input)
 		local _inputStart = dragInformation.inputStart
 		local delta = inputPosition - _inputStart
-		local dropRegisteration = findDroppable(root, Vector2.new(input.Position.X, input.Position.Y))
-		local _result = props.onDragged
+		local info = createDragEventInfo(input, dragInformation, props.id)
+		local dropRegisteration = findDroppable(inputPosition)
+		local hovered = hoveredRef.current
+		local _result = hovered
 		if _result ~= nil then
-			_result(dropRegisteration)
+			_result = _result.guiObject
+		end
+		local _result_1 = dropRegisteration
+		if _result_1 ~= nil then
+			_result_1 = _result_1.guiObject
+		end
+		if _result ~= _result_1 then
+			hoveredRef.current = dropRegisteration
+			local _result_2 = hovered
+			if _result_2 ~= nil then
+				_result_2 = _result_2.dragLeave
+				if _result_2 ~= nil then
+					_result_2(root, info)
+				end
+			end
+			local _result_3 = dropRegisteration
+			if _result_3 ~= nil then
+				_result_3 = _result_3.dragEnter
+				if _result_3 ~= nil then
+					_result_3(root, info)
+				end
+			end
+		end
+		local _result_2 = props.onDragged
+		if _result_2 ~= nil then
+			_result_2(dropRegisteration, info)
 		end
 		setOverlayPosition(dragInformation.absolutePositionStart + delta)
-	end, { findDroppable, props.onDragged })
+	end, { findDroppable, props.onDragged, props.id })
 	local endDrag = React.useCallback(function(input)
 		local root = rootRef.current
 		local dragInformation = dragInformationRef.current
@@ -217,23 +250,40 @@ local Draggable = React.forwardRef(function(props, _ref)
 		if root == nil or dragInformation == nil then
 			return nil
 		end
+		if input.UserInputType ~= dragInformation.inputType or input.KeyCode ~= dragInformation.keyCode then
+			return nil
+		end
 		if registration then
 			registration.draggable.isDragging = false
 		end
-		local dropRegisteration = findDroppable(root, Vector2.new(input.Position.X, input.Position.Y))
+		local inputPosition = toPoint(input)
+		local info = createDragEventInfo(input, dragInformation, props.id)
+		local dropRegisteration = findDroppable(inputPosition)
+		local hovered = hoveredRef.current
 		dragInformationRef.current = nil
-		local _result = props.onDropped
+		hoveredRef.current = nil
+		local _result = dropRegisteration
 		if _result ~= nil then
-			_result(dropRegisteration)
+			_result.drop(root, info)
+		end
+		local _result_1 = hovered
+		if _result_1 ~= nil then
+			_result_1 = _result_1.dragLeave
+			if _result_1 ~= nil then
+				_result_1(root, info)
+			end
+		end
+		local _result_2 = props.onDropped
+		if _result_2 ~= nil then
+			_result_2(dropRegisteration, info)
 		end
 		if props.retainPosition then
 			local parent = root.Parent
-			local _result_1 = parent
-			if _result_1 ~= nil then
-				_result_1 = _result_1:IsA("GuiObject")
+			local _result_3 = parent
+			if _result_3 ~= nil then
+				_result_3 = _result_3:IsA("GuiObject")
 			end
-			if _result_1 then
-				local inputPosition = Vector2.new(input.Position.X, input.Position.Y)
+			if _result_3 then
 				local _inputStart = dragInformation.inputStart
 				local delta = inputPosition - _inputStart
 				local finalOverlayPosition = dragInformation.absolutePositionStart + delta
@@ -246,10 +296,10 @@ local Draggable = React.forwardRef(function(props, _ref)
 			end
 		end
 		setDragging(false)
-	end, { findDroppable, props.onDropped, props.retainPosition })
+	end, { findDroppable, props.onDropped, props.retainPosition, props.id })
 	local contextValue = React.useMemo(function()
 		return {
-			isDragging = false,
+			isDragging = dragInformationRef.current ~= nil,
 			beginDrag = beginDrag,
 			updateDrag = updateDrag,
 			endDrag = endDrag,
@@ -257,7 +307,7 @@ local Draggable = React.forwardRef(function(props, _ref)
 	end, { beginDrag, updateDrag, endDrag })
 	React.useEffect(function()
 		local root = rootRef.current
-		if registry == nil or root == nil then
+		if root == nil or parentDragState.preview then
 			return nil
 		end
 		local registration = {
@@ -266,14 +316,43 @@ local Draggable = React.forwardRef(function(props, _ref)
 			draggable = contextValue,
 		}
 		registrationRef.current = registration
-		registry.register(root, DraggableRegistryKey, registration)
+		local _result = registry
+		if _result ~= nil then
+			_result.register(root, DraggableRegistryKey, registration)
+		end
+		GlobalRegistry.register(root, DraggableRegistryKey, registration)
 		return function()
-			registry.unregister(registration.guiObject, DraggableRegistryKey)
+			local _result_1 = registry
+			if _result_1 ~= nil then
+				_result_1.unregister(registration.guiObject, DraggableRegistryKey)
+			end
+			if GlobalRegistry.get(registration.guiObject, DraggableRegistryKey) == registration then
+				GlobalRegistry.unregister(registration.guiObject, DraggableRegistryKey)
+			end
 			if registrationRef.current == registration then
 				registrationRef.current = nil
 			end
 		end
-	end, { registry, props.id, contextValue })
+	end, { registry, props.id, contextValue, parentDragState.preview })
+	React.useEffect(function()
+		return function()
+			local dragInformation = dragInformationRef.current
+			local hovered = hoveredRef.current
+			hoveredRef.current = nil
+			if dragInformation ~= nil and hovered ~= nil then
+				local _result = hovered.dragLeave
+				if _result ~= nil then
+					_result(dragInformation.root, createDragEventInfo(dragInformation.input, dragInformation, idRef.current))
+				end
+			end
+		end
+	end, {})
+	local dragStateValue = React.useMemo(function()
+		return {
+			preview = parentDragState.preview,
+			dragging = parentDragState.dragging or dragging,
+		}
+	end, { parentDragState.preview, parentDragState.dragging, dragging })
 	local original = React.cloneElement(props.children, {
 		ref = rootRef,
 		Visible = not dragging,
@@ -290,21 +369,35 @@ local Draggable = React.forwardRef(function(props, _ref)
 	}))
 	return React.createElement(DraggableContext.Provider, {
 		value = contextValue,
-	}, usePlaceholder and dragging and placeholder, original, React.createElement(OverlayConsumer, {
+	}, React.createElement(DragStateContext.Provider, {
+		value = dragStateValue,
+	}, usePlaceholder and dragging and placeholder, original), React.createElement(OverlayConsumer, {
 		render = function(overlay)
 			if not dragging or overlay == nil then
 				return nil
 			end
 			local _absolutePosition = overlay.AbsolutePosition
 			local localPosition = overlayPosition - _absolutePosition
-			return createPortal(React.cloneElement(props.children, {
-				Position = UDim2.fromOffset(localPosition.X, localPosition.Y),
-				Size = UDim2.fromOffset(overlaySize.X, overlaySize.Y),
+			local position = UDim2.fromOffset(localPosition.X, localPosition.Y)
+			local size = UDim2.fromOffset(overlaySize.X, overlaySize.Y)
+			local preview = if props.renderOverlay ~= nil then (React.createElement("frame", {
+				key = "DragOverlay",
+				Position = position,
+				Size = size,
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				ZIndex = 100001,
+			}, props.renderOverlay())) else React.cloneElement(props.children, {
+				Position = position,
+				Size = size,
 				AnchorPoint = Vector2.zero,
 				AutomaticSize = Enum.AutomaticSize.None,
 				Visible = true,
 				ZIndex = 100001,
-			}), overlay)
+			})
+			return createPortal(React.createElement(DragStateContext.Provider, {
+				value = PREVIEW_DRAG_STATE,
+			}, preview), overlay)
 		end,
 	}))
 end)

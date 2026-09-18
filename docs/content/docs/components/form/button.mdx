@@ -109,6 +109,18 @@ The shared `spacing` prop controls the gap between the icon and text, as well as
 <Button icon="star" text="Spacious" spacing="lg" />
 ```
 
+## Padding
+
+Set `padding` to override the button's internal padding with a CSS-like value. Like CSS, it accepts one value for all sides, two values (vertical, horizontal), three values (top, horizontal, bottom), or four values (top, right, bottom, left), with or without `px`. A single number is also accepted.
+
+```tsx
+<Button text="Even" padding={8} />
+<Button text="Wide" padding="4 12" />
+<Button text="Custom" padding="4px 12px 4px 12px" />
+```
+
+`padding` overrides the padding derived from `spacing` side by side, including when `spacing="None"`. The gap between the icon and text still follows `spacing`.
+
 ## Disabled state
 
 Set `disabled` to prevent interaction. The button switches to the intent's `disabled` colors (when defined in the theme) and ignores hover and click events.
@@ -146,6 +158,7 @@ import { Button, Group, VStack } from "@rbxts/react-clean-ui";
 | `group`        | `boolean`                            | `false`     | Matches this button's width to the widest button in its `Group`.  |
 | `disabled`     | `boolean`                            | `false`     | Disables hover/click interaction and switches to disabled colors. |
 | `LayoutOrder`  | `number`                             | `undefined` | Native Roblox layout order.                                        |
+| `padding`      | `CssPadding`                         | `undefined` | Overrides the spacing-derived internal padding, per side (for example `8`, `"4 12"`, or `"4px 12px 4px 12px"`). |
 | `styleOverride`| `ButtonStyleOverride`                | `undefined` | Overrides theme values (colors, corners, border, etc.) for this instance only. |
 | `Event`        | `React.InstanceEvent<ImageButton>`   | `undefined` | Native Roblox event handlers, including `Activated`.               |
 
@@ -170,6 +183,7 @@ The button also supports props inherited from the following interfaces.
 * Setting `disabled` sets `Active={false}`, ignores hover and `Activated` events, and switches colours to the intent's `disabled` state (when defined in the theme).
 * When `group` is set and a `Group` ancestor is present, the button's width is fixed to the widest button reporting into that `Group`; its height still grows automatically.
 * Without `text`, `icon`, or `children`, the button renders with no content.
+* Internal padding comes from `spacing` (against `theme.spacing`, with `"None"` meaning `0`). When `padding` is set, its parsed per-side values replace the spacing-derived ones. The resolved padding is also reported to `Group`, so a grouped button's width includes it.
 * Background transparency resolves as `BackgroundTransparency` prop, then `styleOverride.backgroundTransparency`, then the current intent's own `backgroundTransparency` (non-`primary` intents only), then `theme.components.button.backgroundTransparency`.
 * Border thickness resolves as the intent state's `borderThickness`, then `styleOverride.borderThickness`, then `theme.components.button.borderThickness`.
 

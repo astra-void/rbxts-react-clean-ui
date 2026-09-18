@@ -1,0 +1,21 @@
+import React from "@rbxts/react";
+import { DraggableRegistration, DroppableRegistration, RegistryContextValue } from "../../Providers/registry.provider";
+export type FrameEvents = NonNullable<React.InstanceProps<Frame>["Event"]>;
+export declare const dragState: {
+    registry?: RegistryContextValue;
+    handleEvents?: FrameEvents;
+};
+export declare function resetDragState(): void;
+export declare function RegistryHarness(): undefined;
+export declare const DragHandle: React.ForwardRefExoticComponent<Omit<React.InstanceProps<Frame>, "ref"> & React.RefAttributes<Frame>>;
+export declare function pointerInput(position: Vector2, inputType?: Enum.UserInputType): InputObject;
+export declare function centerOf(gui: GuiObject): Vector2;
+export declare function waitForDragItem(host: Instance, name?: string): Frame;
+export declare function waitForHandleEvents(): FrameEvents;
+export declare function waitForDraggableRegistration(dragItem: GuiObject): DraggableRegistration;
+export declare function waitForDroppableRegistration(dropZone: GuiObject): DroppableRegistration;
+export declare function waitForGlobalDraggable(dragItem: GuiObject): DraggableRegistration;
+export declare function waitForGlobalDroppable(dropZone: GuiObject): DroppableRegistration;
+export declare function pressHandle(handle: Frame, point: Vector2, inputType?: Enum.UserInputType): void;
+export declare function moveTo(registration: DraggableRegistration, point: Vector2): void;
+export declare function overlapPoint(a: GuiObject, b: GuiObject): Vector2;

@@ -140,7 +140,7 @@ export function Pie(props: PieProps) {
                 segments.push(<Segment section={section} color={color} fill={-sectionRemaining} />);
             sectionRemaining = 1 + sectionRemaining;
         }
-        if (!props["Label-hidden"] && v.label && (!props["label-hover"] || state.hover === index)) {
+        if (!props["Label-hidden"] && v.label !== undefined && v.label !== "" && (!props["label-hover"] || state.hover === index)) {
             const label = v.label;
             const isTextLabel = typeIs(label, "string") || label.text !== undefined;
 

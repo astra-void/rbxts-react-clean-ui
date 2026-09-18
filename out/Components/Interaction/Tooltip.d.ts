@@ -6,6 +6,8 @@ interface TooltipProps extends BoxProps, IntentElementProps {
     content: React.ReactNode | string;
     children: React.ReactElement<React.InstanceProps<GuiObject>>;
     placement?: TooltipPlacement;
+    disabled?: boolean;
+    open?: boolean;
 }
 export declare function Tooltip(props: TooltipProps): React.JSX.Element;
 export {};

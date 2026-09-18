@@ -1,50 +1,56 @@
 # Draggable
 
-`Draggable` makes a single GUI element movable by pointer or touch, and cooperates with `Droppable` (see [droppable.md](./droppable.md)) to report which drop target is currently underneath it. It follows the shared conventions in [Components](../index.md) and the layout-wide notes in [Layout](./index.md).
+`Draggable` makes a single GUI element movable by pointer, touch or any other configured input, and cooperates with `Droppable` (see [droppable.md](./droppable.md)) to report which drop target is underneath it. It follows the shared conventions in [Components](../index.md) and the layout-wide notes in [Layout](./index.md).
 
-`Draggable` and `Droppable` form a pair: `Draggable` reports the `DroppableRegistration` it is over, and `Droppable` reports the raw dragged `GuiObject`. Both rely on the shared registry provider (`RegistryProvider`, `RegistryContext`) to discover one another, and `Draggable` additionally relies on an `OverlayProvider` to render the element being dragged above the rest of the UI.
+`Draggable` and `Droppable` form a pair: `Draggable` reports the `DroppableRegistration` it is over, and `Droppable` receives the raw dragged `GuiObject`. They find each other through a module-level shared registry, so no provider is needed for drag/drop to work. `Draggable` additionally relies on an `OverlayProvider` to render the element being dragged above the rest of the UI.
 
 ## Public API
 
-- `Draggable` accepts a single `children: ReactElement<GuiObjectProps>` — the element that is moved. This element is cloned, not wrapped: `Draggable` does not introduce an extra `Frame` around it.
-- `id?: string` is an opaque identifier stored on this draggable's registry entry. It is not read by `Draggable` itself.
-- `placeholder?: boolean` (default `true`) keeps a themed placeholder frame in the original layout position/size while dragging, so surrounding layout (e.g. a `VStack`) does not reflow around the now-hidden original.
-- `retainPosition?: boolean` (default `false`, i.e. off). When enabled, releasing the drag converts the element's final absolute screen position back into a `Position` offset relative to its original parent and applies it to the underlying instance, so the element stays where it was dropped. Without it, the element snaps back to its original `Position` once dragging ends (because the drag preview is discarded and the original, un-moved instance becomes visible again).
-- `onStartDrag?: () => void` fires once when a drag begins.
-- `onDragged?: (droppable?: DroppableRegistration) => void` fires on every pointer/touch move during a drag, with the `DroppableRegistration` currently under the pointer (`undefined` if none).
-- `onDropped?: (droppable?: DroppableRegistration) => void` fires once when the drag ends (button/touch released), with the `DroppableRegistration` under the pointer at release time.
-- `Draggable.Handle` is the sub-component that must wrap the part of the child that starts a drag. `Draggable.Handle` accepts a single child element and requires a `Draggable` ancestor (it reads `DraggableContext` and asserts if missing).
-- There is no `disabled` prop; a `Draggable` can always be dragged unless another draggable is currently being dragged (see below).
+- `DraggableProps` (exported):
+  - `children: ReactElement<GuiObjectProps>` — the element that is moved. It is cloned, not wrapped: `Draggable` does not introduce an extra `Frame` around it.
+  - `id?: string` — opaque identifier stored on this draggable's registry entry and passed as `DragEventInfo.id` to every callback (including `Droppable`'s).
+  - `inputTypes?: Enum.UserInputType[]` (default `[MouseButton1, Touch]`) — which inputs start a drag from a `Draggable.Handle`.
+  - `placeholder?: boolean` (default `true`) — keeps a themed placeholder frame in the original layout position/size while dragging, so surrounding layout (e.g. a `VStack`) does not reflow around the now-hidden original.
+  - `retainPosition?: boolean` (default `false`). When enabled, releasing the drag converts the element's final absolute screen position back into a `Position` offset relative to its original parent and applies it to the underlying instance, so the element stays where it was dropped. Without it, the element snaps back to its original `Position` once dragging ends.
+  - `renderOverlay?: () => React.ReactNode` — custom drag preview. When set, the preview is a transparent `Frame` named `DragOverlay` at the dragged element's captured size and current position, containing whatever `renderOverlay()` returns (size content against it with scale). When unset, the preview is a clone of `children` (see Rendering).
+  - `onStartDrag?: (info: DragEventInfo) => void` — fires once when a drag begins.
+  - `onDragged?: (droppable: DroppableRegistration | undefined, info: DragEventInfo) => void` — fires on every move during a drag with the topmost `Droppable` under the pointer.
+  - `onDropped?: (droppable: DroppableRegistration | undefined, info: DragEventInfo) => void` — fires once on release with the topmost `Droppable` under the pointer at release time.
+  - Callbacks written for the old signatures (`(droppable?) => void`, `() => void`) still type-check; `info` is an extra trailing argument.
+- `DragEventInfo` (exported from Contexts): `{ inputType: Enum.UserInputType; input: InputObject; position: Vector2; id?: string }`. `inputType` is the input that *started* the drag; `input`/`position` are the event that triggered the callback; `id` is the `Draggable`'s `id`.
+- `Draggable.Handle` wraps the part of the child that starts a drag. It takes a single child element — a native element (`<frame>`, `<imagebutton>`, ...) or a component that forwards `Event` to an instance — and requires a `Draggable` ancestor (asserts otherwise). It sets `Active = true` on the child and adds an `InputBegan` handler; a handler the child already has still runs first.
+- There is no `disabled` prop; a `Draggable` can always be dragged unless another draggable is mid-drag.
 
 ## Registration
 
-- On mount, `Draggable` registers its root instance in the shared registry (`RegistryContext`) under `DraggableRegistryKey`, keyed by the instance itself, storing `{ guiObject, id, draggable }`. It unregisters on unmount.
-- `Droppable` registers similarly under `DroppableRegistryKey` (see droppable.md).
-- Both components require a `RegistryProvider` ancestor; without one, registration and lookup silently no-op (no crash), so drag/drop coordination simply does not happen.
+- On mount, `Draggable` registers its root instance under `DraggableRegistryKey` with `{ guiObject, id, draggable }` in the shared registry (`GlobalRegistry`), and also in the nearest `RegistryProvider`'s registry if there is one. It unregisters from both on unmount.
+- A `Draggable` rendered inside another `Draggable`'s drag preview does not register.
 
 ## Drag lifecycle
 
-- Dragging starts on `InputBegan` on a `Draggable.Handle`-wrapped element, for `MouseButton1` or `Touch` input only. If that input point is over a descendant `GuiButton` or `TextBox` within the handle, drag start is suppressed so the nested interactive control can complete its own input lifecycle normally.
-- Before starting, `Draggable` checks every other draggable registered in the registry; if any of them reports itself as currently dragging, the new drag is rejected outright (no state changes, `onStartDrag` is not called). This enforces that only one `Draggable` can be mid-drag at a time.
-- On a successful start: the component records the input's start position, the root's starting absolute position, and starting `Position`; calls `onStartDrag`; and enters the dragging state.
-- While dragging, `Draggable.Handle` listens globally for `InputChanged` (mouse movement or touch) and forwards it to update the drag, and for `InputEnded` (`MouseButton1` or `Touch`) to end the drag. These listeners are attached for the lifetime of the handle, not just during an active drag, and become live regardless of which draggable started the drag (a handle can therefore begin updating a different draggable's drag if that draggable is the active one — in practice this is used to have exactly one active drag at a time, per the check above).
-- On each update, the component computes the pointer delta from the drag's start position, looks up whatever droppable(s) are at the current pointer position, and calls `onDragged` with the found `DroppableRegistration` (or `undefined`).
-- On end, the same drop lookup is performed, `onDropped` is called with the result, dragging state is cleared, and — if `retainPosition` is set — the original instance's `Position` is rewritten to match where the drag preview ended up (accounting for the instance's `AnchorPoint`).
+- A drag starts on `InputBegan` on the handle when the input's `UserInputType` is in `inputTypes`. If the press point is over a visible descendant `GuiButton` or `TextBox` of the handle, the drag is not started so that control keeps its own input.
+- Only one `Draggable` may be mid-drag at a time, across every mounted `Draggable` (including other React roots). A start while another drag is active is ignored (no state change, no `onStartDrag`).
+- While dragging, the handle listens globally for `InputChanged` (`MouseMovement` or `Touch`) to move the preview, and for `InputEnded`. The drag ends only when the ended input has the same `UserInputType` (and `KeyCode`) as the one that started it; other releases are ignored.
+- On each move: the preview follows the pointer delta, the topmost droppable under the pointer is looked up, enter/leave notifications are sent if it changed (see below), and `onDragged` fires.
+- On release, in order: the topmost droppable at the release point gets `drop` (its `onDrop`) exactly once; the droppable that was last hovered (if any) gets `dragLeave`; `onDropped` fires; then `retainPosition` is applied and the dragging state is cleared.
 
 ## Drop-target detection
 
-- Drop-target lookup finds every visible `GuiObject` descendant of the drag root's highest ancestor `Frame` whose absolute bounds contain the pointer position, ordered from highest to lowest `ZIndex`, and checks each one against the droppable registry.
-- Every matching registered droppable at that position has its `drop(instance)` callback invoked (i.e. `onDrop` fires on every overlapping droppable under the pointer, not only the top-most one) — see the note under droppable.md. The `DroppableRegistration` reported back to `Draggable`'s `onDragged`/`onDropped` is whichever matching registration was checked last (the lowest-`ZIndex` match among the overlapping droppables), not necessarily the top-most one.
-- If no registered droppable is under the pointer, both callbacks receive `undefined`.
+- Candidates are every registered `Droppable` whose instance contains the pointer, is `Visible` with every `GuiObject` ancestor `Visible`, is not clipped away at that point by an ancestor with `ClipsDescendants` (or a `CanvasGroup`), and sits under an enabled `LayerCollector` that is not a `SurfaceGui`/`BillboardGui`. Droppables are found wherever they are mounted: sibling trees, other `ScreenGui`s, `CoreGui`, other React roots.
+- Among the candidates, the one drawn on top wins: higher `ScreenGui.DisplayOrder` first; within one `LayerCollector`, `ZIndexBehavior.Sibling` compares the diverging ancestors' `ZIndex` then sibling order (later sibling on top, descendants above ancestors), and `ZIndexBehavior.Global` compares the objects' own `ZIndex` then tree order.
+- Only the winner is notified or reported. No droppable under the pointer → callbacks receive `undefined` and nobody gets `drop`.
+- Enter/leave: `dragEnter` fires on a droppable when it becomes the winner during a move, and `dragLeave` when it stops being the winner (another target wins, the pointer leaves, the drag is released, or the `Draggable` unmounts mid-drag). Every enter is followed by exactly one leave. A target that only becomes the winner at the release point gets `drop` without an enter.
 
 ## Rendering and layout
 
-- While not dragging, `Draggable` renders only the cloned child (with `Visible={true}` implicitly, since `Visible={!dragging}` is `true` when not dragging) in its original position in the tree — no extra wrapper.
+- While not dragging, `Draggable` renders only the cloned child in its original position, with no wrapper.
 - While dragging:
-  - The original child is rendered with `Visible={false}` but stays mounted in place (so layout siblings around it are unaffected only if `placeholder` compensates for its space).
-  - If `placeholder` is enabled, a themed placeholder `Frame` is rendered in the original child's place, matching its starting `Position`, `AnchorPoint`, `Size`, `LayoutOrder`, and `ZIndex`, so list/flex layouts don't collapse the gap.
-  - A drag preview — a second clone of the child — is rendered through `createPortal` into the nearest `OverlayProvider`'s overlay `Frame`, positioned in overlay-local coordinates (screen position minus the overlay's absolute position), sized to the original's captured size, anchored at `Vector2.zero`, always `Visible`, and given a very high `ZIndex` (`100001`) so it renders above ordinary content. If no `OverlayProvider` is present, the preview is not rendered (no crash, but the element becomes invisible while dragging since the original is hidden).
-- The `ref` passed to `Draggable` itself (`React.forwardRef<Frame, ...>`) is currently not attached to any rendered instance — `Draggable` has no wrapping frame, so a caller-supplied ref is not populated. Treat this as a known limitation rather than intended API surface.
+  - The original child stays mounted with `Visible = false`.
+  - If `placeholder` is enabled, a themed placeholder `Frame` named `DraggablePlaceholder` is rendered in the original's place with its starting `Position`, `AnchorPoint`, size, `LayoutOrder` and `ZIndex`.
+  - A preview is portalled into the nearest `OverlayProvider`'s overlay frame, positioned in overlay-local coordinates, sized to the original's captured size, anchored at `(0, 0)`, `Visible`, with `ZIndex = 100001`. Without `renderOverlay` it is a second clone of `children`. Without an `OverlayProvider` there is no preview (no crash).
+  - Everything in the preview is inert: `Draggable.Handle`s start nothing, `Droppable`s and nested `Draggable`s don't register, and `Tooltip`s never open.
+  - Tooltips inside the original (hidden) child are closed for the duration of the drag.
+- The `ref` passed to `Draggable` itself is not attached to any instance (known limitation, tracked in ISSUES.md).
 
 ## Theme
 
@@ -54,18 +60,32 @@ Draggable-specific theme values live under `theme.components.draggable.placehold
 - `borderColor` and `borderThickness` style an inner (`Enum.BorderStrokePosition.Inner`) stroke around the placeholder.
 - `cornerRadius` rounds the placeholder's corners via the shared `Corners` decorator.
 
-The placeholder's `BackgroundTransparency` is hard-coded to `0.3` at the call site, which currently overrides the theme's `backgroundTransparency` value for the placeholder frame itself (the theme value is still applied first as a prop and then immediately overwritten) — note this discrepancy rather than treating the theme value as authoritative for that one property.
+The call site passes `BackgroundTransparency={0.3}`, but `Placeholder` spreads its props before applying the theme's `backgroundTransparency`, so the theme value is what renders and the `0.3` is dead (see ISSUES.md).
 
-There is no configurable animation: the drag preview follows the pointer directly with no tween.
+There is no configurable animation: the preview follows the pointer directly.
 
 ## Story
 
 The story should demonstrate:
-- Two or more `Draggable` elements that can be picked up by their `Draggable.Handle` and moved.
-- At least one `Droppable` target that visibly reacts (e.g. via `DroppableContext` in a custom child) when a dragged element is hovering over it, and one interaction where a drop is accepted (e.g. moves an item from one list to another) as well as one where the drop is rejected (dropped outside any `Droppable`, snapping back).
-- A `retainPosition` example (free-floating drag with no drop target, such as a draggable window) alongside a list-reordering-style example that uses `placeholder` to hold the gap.
-- The one-drag-at-a-time rule: attempting to start a second drag while one is in progress should have no visible effect.
+- Two or more `Draggable` elements picked up by their `Draggable.Handle` and moved, including one whose handle is a native element.
+- `Droppable` targets that highlight through `onDragEnter`/`onDragLeave`, one accepted drop (item moves between lists) and one rejected drop (released outside any `Droppable`, snapping back).
+- Two overlapping `Droppable`s where only the one drawn on top receives the drop.
+- A `retainPosition` example (a draggable window) alongside a list-reordering example that uses `placeholder`.
+- A `renderOverlay` example (e.g. a small icon as the preview) and an item with a `Tooltip` that stays closed while dragged.
+- An `inputTypes` example (e.g. right-button drag) that shows `info.inputType` on drop.
 
 ## Loom
 
-- The Loom scene should show at least one drag-between-two-drop-zones interaction (e.g. moving an item from a source list into a target zone) using `placeholder`, since this is the primary use case.
+- The Loom scene should show at least one drag-between-two-drop-zones interaction using `placeholder`, since this is the primary use case.
+
+## Implementation notes
+
+- `Draggable.Handle` injects its handler through `ElementHelper.cloneWithEvents`. `@rbxts/react` only translates `Event={{...}}` into `React.Event.*` keys inside its own `createElement`; `React.cloneElement` skips that, so a raw `Event` table on a native child becomes `instance.Event = {...}`, which throws and unmounts the whole root. Native children get `React.Event.InputBegan` keys (and the child's existing handler is read from that key, since `props.Event` is always `undefined` there); component children get a merged `Event` table.
+- Droppables are looked up from `GlobalRegistry`, not the context registry, so targets in another React root or outside any `RegistryProvider` are found. Registration also goes into the context registry so `registry.get(instance, DroppableRegistryKey)` keeps working for consumers and tests.
+- `findDroppable` picks the winner with a linear scan over `GuiHelper.isRenderedAbove` instead of sorting, because Luau's `table.sort` isn't stable and the old descending-`ZIndex` sort kept the *last* match (the lowest `ZIndex`). It also called `drop` on every overlapping match on every move, which is why `onDrop` used to fire while hovering.
+- Hover identity is compared by `guiObject`, not registration object, because a `Droppable` recreates its registration when `id` changes.
+- The drag-end filter compares `UserInputType` and `KeyCode` only, not `InputObject` identity; with several fingers down, any touch release ends a touch drag.
+- `DragStateContext` (`{ preview, dragging }`) is how nested components learn they are inside the preview or inside a dragged original. `dragging` is OR-ed with the parent value so tooltips inside a dragged window's nested items also close. The preview gets the constant `PREVIEW_DRAG_STATE`.
+- `contextValue.isDragging` is initialised from `dragInformationRef` so a mid-drag re-render (new inline callback props → new context value → new registration) doesn't reset it and let a second drag start.
+- The unmount cleanup sends the pending `dragLeave` with `DragInformation.root`, captured in `beginDrag`, not `rootRef.current`. The Luau reconciler detaches a deleted host component's object ref in the mutation phase, before passive effect cleanups run, so `rootRef.current` is already `nil` there.
+- `isInteractiveDescendantAtInput` scans only the handle's own descendants; the old version searched the whole highest `Frame` ancestor.

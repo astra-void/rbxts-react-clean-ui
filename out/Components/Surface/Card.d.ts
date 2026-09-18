@@ -8,9 +8,7 @@ interface CardHeaderProps extends IntentElementProps, PositionElementProps, ZInd
     resolvedPadding?: ResolvedPadding;
 }
 export declare const CardHeader: React.ForwardRefExoticComponent<CardHeaderProps & React.RefAttributes<ImageLabel>>;
-interface CardBodyProps extends BoxProps {
-}
-export declare const CardBody: React.ForwardRefExoticComponent<Omit<CardBodyProps, "ref"> & React.RefAttributes<ImageLabel>>;
+export declare const CardBody: React.ForwardRefExoticComponent<Omit<BoxProps, "ref"> & React.RefAttributes<ImageLabel>>;
 interface CardFooterProps extends BoxProps, IntentElementProps {
     overlay?: boolean;
     padding?: CssPadding;

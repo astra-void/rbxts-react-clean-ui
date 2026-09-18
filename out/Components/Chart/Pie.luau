@@ -132,14 +132,7 @@ local function Pie(props)
 			end
 			sectionRemaining = 1 + sectionRemaining
 		end
-		local _condition = not props["Label-hidden"]
-		if _condition then
-			_condition = v.label
-			if _condition ~= "" and _condition then
-				_condition = (not props["label-hover"] or state.hover == index)
-			end
-		end
-		if _condition ~= "" and _condition then
+		if not props["Label-hidden"] and v.label ~= nil and v.label ~= "" and (not props["label-hover"] or state.hover == index) then
 			local label = v.label
 			local isTextLabel = type(label) == "string" or label.text ~= nil
 			local position = if #props.values == 1 then UDim2.fromScale(0.5, 0.5) else getCirclePosition(totalPercent, props["label-distance"])
@@ -157,31 +150,31 @@ local function Pie(props)
 					BackgroundColor3 = background,
 					BorderSizePixel = 0,
 				}
-				local _condition_1 = theme.components.charts.pie.labels.backgroundTransparency
-				if _condition_1 == nil then
-					_condition_1 = theme.components.box.backgroundTransparency
+				local _condition = theme.components.charts.pie.labels.backgroundTransparency
+				if _condition == nil then
+					_condition = theme.components.box.backgroundTransparency
 				end
-				_attributes.BackgroundTransparency = _condition_1
+				_attributes.BackgroundTransparency = _condition
 				local _exp_2 = React.createElement(Text, {
 					name = "PieLabelText",
 					text = text,
 					typography = TypographyHelper:getTypography(theme, "md", theme.components.charts.pie.labels.typography),
 				})
 				local _attributes_1 = {}
-				local _condition_2 = theme.components.charts.pie.labels.cornerRadius
-				if _condition_2 == nil then
-					_condition_2 = theme.components.box.cornerRadius
+				local _condition_1 = theme.components.charts.pie.labels.cornerRadius
+				if _condition_1 == nil then
+					_condition_1 = theme.components.box.cornerRadius
 				end
-				_attributes_1.radius = _condition_2
+				_attributes_1.radius = _condition_1
 				local _exp_3 = React.createElement(Corners, _attributes_1)
 				local _attributes_2 = {
 					key = "Stroke",
 				}
-				local _condition_3 = theme.components.charts.pie.labels.borderThickness
-				if _condition_3 == nil then
-					_condition_3 = theme.components.box.borderThickness
+				local _condition_2 = theme.components.charts.pie.labels.borderThickness
+				if _condition_2 == nil then
+					_condition_2 = theme.components.box.borderThickness
 				end
-				_attributes_2.Thickness = _condition_3
+				_attributes_2.Thickness = _condition_2
 				_attributes_2.BorderStrokePosition = Enum.BorderStrokePosition.Inner
 				_attributes_2.Color = border
 				local _arg0_1 = React.createElement("frame", _attributes, _exp_2, _exp_3, React.createElement("uistroke", _attributes_2), React.createElement(Padding, {

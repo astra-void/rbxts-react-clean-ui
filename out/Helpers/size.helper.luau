@@ -65,21 +65,13 @@ do
 		end
 		local width = if props.width == "Auto" then nil else props.width
 		local height = if props.height == "Auto" then nil else props.height
-		local _condition = props.Size ~= nil
-		if not _condition then
-			local _condition_1 = width
-			if _condition_1 ~= 0 and _condition_1 == _condition_1 and _condition_1 ~= "" and _condition_1 then
-				_condition_1 = height
-			end
-			_condition = _condition_1
-		end
-		if _condition ~= 0 and _condition == _condition and _condition ~= "" and _condition then
+		if props.Size ~= nil or (width ~= nil and width ~= 0 and height ~= nil and height ~= 0) then
 			return Enum.AutomaticSize.None
 		end
 		if width == nil and height == nil and defaultValue == nil then
 			return Enum.AutomaticSize.XY
 		end
-		if not (width ~= 0 and width == width and width ~= "" and width) then
+		if width == nil or width == 0 then
 			return Enum.AutomaticSize.X
 		end
 		return if defaultValue ~= nil then defaultValue else Enum.AutomaticSize.Y

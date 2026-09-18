@@ -157,9 +157,7 @@ export const CardHeader = React.forwardRef<ImageLabel, CardHeaderProps>(
             {props.children}
         </Container>
     });
-interface CardBodyProps extends BoxProps {
-
-}
+type CardBodyProps = BoxProps;
 
 export const CardBody = React.forwardRef<ImageLabel, CardBodyProps>(
     (props, ref) => {

@@ -20,6 +20,7 @@ interface TabsBodyProps extends ScalableElementProps {
     backgroundImage?: CssBackgroundImage;
     backgroundGradient?: CssBackgroundGradient;
     children?: React.ReactNode;
+    LayoutOrder?: number;
 }
 declare const TabsBody: React.ForwardRefExoticComponent<TabsBodyProps & React.RefAttributes<ImageLabel>>;
 export interface TabsProps {

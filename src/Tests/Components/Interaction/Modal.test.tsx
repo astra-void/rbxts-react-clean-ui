@@ -18,6 +18,7 @@ import {
 } from "../../../Providers/registry.provider";
 import { ThemeProvider } from "../../../Providers/theme.provider";
 import { DefaultTheme } from "../../../Theme";
+import { pointerInput } from "../../Helpers/drag";
 
 let latestRegistry: RegistryContextValue | undefined;
 
@@ -289,8 +290,8 @@ class ModalMountValidation {
 		Assert.equal(registration.guiObject.AnchorPoint, new Vector2(0.5, 0.5));
 		Assert.equal(registration.guiObject.Position, UDim2.fromScale(0.5, 0.5));
 
-		const dragStart = { Position: new Vector3(10, 20, 0) } as unknown as InputObject;
-		const dragEnd = { Position: new Vector3(40, 60, 0) } as unknown as InputObject;
+		const dragStart = pointerInput(new Vector2(10, 20));
+		const dragEnd = pointerInput(new Vector2(40, 60));
 
 		registration.draggable.beginDrag(dragStart, header);
 		registration.draggable.endDrag(dragEnd);

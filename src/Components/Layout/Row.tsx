@@ -1,6 +1,6 @@
 import React from "@rbxts/react";
 import { Column } from "./Column";
-import { BreakPointElementProps, BreakpointValue, SpacedElementProps } from "../../Interfaces/";
+import { BreakPointElementProps, SpacedElementProps } from "../../Interfaces/";
 import { CleanThemeContext, RowContext } from "../../Contexts";
 import { BreakpointHelper, SpacingHelper } from "../../Helpers/";
 

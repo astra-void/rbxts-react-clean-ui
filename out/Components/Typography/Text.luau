@@ -89,8 +89,8 @@ local Text = React.forwardRef(function(props, ref)
 	end
 	_attributes.key = _condition_1
 	_attributes.ref = ref
-	_attributes.Size = UDim2.fromScale(0, 0)
-	_attributes.AutomaticSize = Enum.AutomaticSize.XY
+	_attributes.Size = props.Size or UDim2.fromScale(0, 0)
+	_attributes.AutomaticSize = props.AutomaticSize or Enum.AutomaticSize.XY
 	_attributes.AnchorPoint = props.AnchorPoint
 	local _condition_2 = props.LineHeight
 	if _condition_2 == nil then

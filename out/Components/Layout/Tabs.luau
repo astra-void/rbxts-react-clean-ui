@@ -216,6 +216,7 @@ local TabsBody = React.forwardRef(function(props, ref)
 		name = "TabsBody",
 		ref = ref,
 		width = "100%",
+		LayoutOrder = props.LayoutOrder,
 		backgroundImage = props.backgroundImage or theme.components.tabs.backgroundImage,
 	}, theme.components.tabs.borderThickness > 0 and (React.createElement("uistroke", {
 		key = "Stroke",

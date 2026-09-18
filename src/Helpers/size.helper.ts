@@ -87,12 +87,12 @@ export class SizeHelper {
         const width = props.width === "Auto" ? undefined : props.width;
         const height = props.height === "Auto" ? undefined : props.height;
 
-        if (props.Size !== undefined || (width && height))
+        if (props.Size !== undefined || (width !== undefined && width !== 0 && height !== undefined && height !== 0))
             return Enum.AutomaticSize.None
         if (width === undefined && height === undefined && defaultValue === undefined)
             return Enum.AutomaticSize.XY
 
-        if (!width)
+        if (width === undefined || width === 0)
             return Enum.AutomaticSize.X
 
         return defaultValue !== undefined ? defaultValue : Enum.AutomaticSize.Y

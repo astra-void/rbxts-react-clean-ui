@@ -5,7 +5,7 @@ const { Skip } = Decorators;
 import { Button } from "../../../Components/Input/Button";
 import { Group, HStack } from "../../../Components/Layout";
 import { ThemeProvider } from "../../../Providers/theme.provider";
-import { WoodenTheme } from "../../../Theme";
+import { DefaultTheme, WoodenTheme } from "../../../Theme";
 import {
 	STUDIO_SKIP_MESSAGE,
 	assertAllDescendantsContained,
@@ -26,6 +26,19 @@ const WOODEN_SECONDARY_BOTTOM = Color3.fromHex("#5C3A18");
 
 function waitForButton(host: Instance, name = "Button"): ImageButton {
 	return waitForGuiObject<ImageButton>(host, name);
+}
+
+function rootPadding(button: ImageButton): UIPadding {
+	const padding = button.FindFirstChildWhichIsA("UIPadding");
+	Assert.notUndefined(padding, `Expected ${button.Name} to have a direct UIPadding child`);
+	return padding!;
+}
+
+function assertSides(padding: UIPadding, top: number, bottom: number, left: number, right: number, label: string) {
+	Assert.equal(padding.PaddingTop, new UDim(0, top), `${label}: PaddingTop`);
+	Assert.equal(padding.PaddingBottom, new UDim(0, bottom), `${label}: PaddingBottom`);
+	Assert.equal(padding.PaddingLeft, new UDim(0, left), `${label}: PaddingLeft`);
+	Assert.equal(padding.PaddingRight, new UDim(0, right), `${label}: PaddingRight`);
 }
 
 @Tag("Studio")
@@ -105,7 +118,9 @@ class ButtonMountValidation {
 	}
 
 	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
-	@DisplayName("Under WoodenTheme a secondary Button renders an opaque gradient fill, a 3px border stroke and #D3CBA3 text")
+	@DisplayName(
+		"Under WoodenTheme a secondary Button renders an opaque gradient fill, a 3px border stroke and #D3CBA3 text",
+	)
 	@Test
 	public woodenSecondary() {
 		withMounted(
@@ -136,7 +151,9 @@ class ButtonMountValidation {
 	}
 
 	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
-	@DisplayName("Under WoodenTheme a primary Button keeps its transparent image look with a zero-thickness stroke and no gradient")
+	@DisplayName(
+		"Under WoodenTheme a primary Button keeps its transparent image look with a zero-thickness stroke and no gradient",
+	)
 	@Test
 	public woodenPrimaryUnchanged() {
 		withMounted(
@@ -153,6 +170,57 @@ class ButtonMountValidation {
 				Assert.undefined(button.FindFirstChild("Gradient"));
 			},
 		);
+	}
+
+	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	@DisplayName("A two-value padding quad sets top/bottom from the first value and left/right from the second")
+	@Test
+	public paddingQuadSides() {
+		withMounted(400, 200, <Button name="PaddedButton" text="Save" padding="4 12" />, (mounted) => {
+			const button = waitForButton(mounted.host, "PaddedButton");
+
+			assertSides(rootPadding(button), 4, 4, 12, 12, 'padding="4 12"');
+		});
+	}
+
+	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	@DisplayName("Without padding every side uses the theme spacing at the default spacing key")
+	@Test
+	public defaultPaddingFromTheme() {
+		const expected = DefaultTheme.spacing[DefaultTheme.default.spacing];
+		Assert.notUndefined(expected, "Expected the default theme to define spacing at its default spacing key");
+
+		withMounted(400, 200, <Button text="Save" />, (mounted) => {
+			const button = waitForButton(mounted.host);
+
+			assertSides(rootPadding(button), expected!, expected!, expected!, expected!, "no padding prop");
+		});
+	}
+
+	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	@DisplayName("spacing None does not zero an explicit single-value padding, which applies to all four sides")
+	@Test
+	public paddingOverridesNone() {
+		withMounted(400, 200, <Button text="Save" spacing="None" padding="6" />, (mounted) => {
+			const button = waitForButton(mounted.host);
+
+			assertSides(rootPadding(button), 6, 6, 6, 6, 'spacing="None" padding="6"');
+		});
+	}
+
+	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	@DisplayName("With padding set the icon keeps LayoutOrder 1 and the label LayoutOrder 2, laid out left to right")
+	@Test
+	public paddingKeepsOrder() {
+		withMounted(400, 200, <Button text="Save changes" icon="check" padding="4 12" />, (mounted) => {
+			const button = waitForButton(mounted.host);
+			const icon = waitForGuiObject<ImageLabel>(button, "ButtonIcon");
+			const label = waitForGuiObject<TextLabel>(button, "ButtonText");
+
+			Assert.equal(icon.LayoutOrder, 1);
+			Assert.equal(label.LayoutOrder, 2);
+			assertStackedHorizontally([icon, label], "padded icon + text row");
+		});
 	}
 }
 

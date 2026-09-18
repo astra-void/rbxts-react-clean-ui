@@ -1,0 +1,119 @@
+---
+title: FadeGroup
+description: Fade or tint a whole section of UI with a single value.
+icon: Blend
+---
+
+`FadeGroup` is a sizing and positioning wrapper, like [`Container`](/components/layout/container), whose root is a Roblox [`CanvasGroup`](https://create.roblox.com/docs/reference/engine/classes/CanvasGroup). It fades or tints its whole subtree through one value, `GroupTransparency` or `GroupColor3`, instead of changing every descendant's own transparency or colour. Use it to dim an inventory slot, fade a panel in or out, or grey out a disabled section.
+
+## Import
+
+```tsx
+import { FadeGroup } from "@rbxts/react-clean-ui";
+```
+
+## Basic usage
+
+```tsx
+import React from "@rbxts/react";
+import { Box, FadeGroup, Icon, Text, VStack } from "@rbxts/react-clean-ui";
+
+export function InventorySlotExample() {
+    return (
+        <FadeGroup GroupTransparency={0.5}>
+            <Box>
+                <VStack>
+                    <Icon icon="star" />
+                    <Text text="Empty slot" />
+                </VStack>
+            </Box>
+        </FadeGroup>
+    );
+}
+```
+
+The icon, text, and box background all fade together, so a half-transparent slot looks like one faded element rather than overlapping semi-transparent layers.
+
+## Fading
+
+`GroupTransparency` fades the group and all of its descendants. `0` is fully visible and `1` is fully invisible.
+
+```tsx
+<FadeGroup GroupTransparency={isEmpty ? 0.6 : 0}>
+    {/* slot content */}
+</FadeGroup>
+```
+
+It also accepts a binding, so the fade can be animated. For example, with `useTween` from `@rbxts/react-ripple`:
+
+```tsx
+import React from "@rbxts/react";
+import { useTween } from "@rbxts/react-ripple";
+import { FadeGroup } from "@rbxts/react-clean-ui";
+
+export function FadingPanel(props: { open: boolean; children?: React.ReactNode }) {
+    const [transparency, tween] = useTween(props.open ? 0 : 1, { duration: 0.2 });
+
+    React.useEffect(() => {
+        tween.setGoal(props.open ? 0 : 1, { duration: 0.2 });
+        tween.start();
+    }, [props.open, tween]);
+
+    return <FadeGroup GroupTransparency={transparency}>{props.children}</FadeGroup>;
+}
+```
+
+## Tinting
+
+`GroupColor3` multiplies the colour of the whole rendered subtree. A grey tint is a quick way to show a disabled section without restyling each child.
+
+```tsx
+<FadeGroup GroupColor3={disabled ? Color3.fromRGB(140, 140, 140) : new Color3(1, 1, 1)}>
+    {/* section content */}
+</FadeGroup>
+```
+
+White (the default) applies no tint. The tint only changes appearance; it does not block input, so still disable the controls inside.
+
+## Sizing and positioning
+
+`FadeGroup` uses the same sizing and positioning props as `Container`. With no `Size`, `width`, or `height`, it sizes itself to its content.
+
+```tsx
+<FadeGroup width="200" height="80" center GroupTransparency={0.3}>
+    {/* content */}
+</FadeGroup>
+```
+
+## Props
+
+### FadeGroup-specific props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `GroupTransparency` | `number \| Binding<number>` | `0` | Fades the group and all of its descendants together. |
+| `GroupColor3` | `Color3 \| Binding<Color3>` | White (no tint) | Multiplies the colour of the whole rendered subtree. |
+| `name` | `string` | `"FadeGroup"` | Sets the instance name. |
+| `children` | `React.ReactNode` | `undefined` | Content rendered directly inside the `CanvasGroup`. |
+
+### Shared props
+
+| Interface | Purpose |
+| --- | --- |
+| `SizeElementProps` | Configures `width`, `height`, `Size`, and automatic sizing. |
+| `PositionElementProps` | Configures `top`, `left`, `right`, `bottom`, `center`, `Position`, and `AnchorPoint`. |
+| `ZIndexElementProps` | Configures render order via `ZIndex`. |
+| `React.InstanceProps<CanvasGroup>` | Native `CanvasGroup` properties such as `LayoutOrder`, `Visible`, `ClipsDescendants`, `Rotation`, `BackgroundColor3`, `Event`, and `Change`. |
+
+## Behaviour
+
+* With no `Size`, `width`, or `height`, `AutomaticSize` is `XY` and the group fits its content. An explicit `Size`, `Position`, `AnchorPoint`, or `AutomaticSize` always wins.
+* `center` sets `Position` to 50% and `AnchorPoint` to `(0.5, 0.5)` directly. Unlike `Container`, it never adds a centring wrapper frame for automatically sized content.
+* `BackgroundTransparency` defaults to `1` and `BorderSizePixel` to `0`, so with no background props the group itself is invisible and only its children show.
+* Children are direct children of the `CanvasGroup`, with no wrapper frame. A `UIListLayout`, `UIPadding`, or `UICorner` passed as a child applies to the `CanvasGroup` itself.
+* `ref` forwards to the root `CanvasGroup`.
+* The subtree is drawn to an offscreen texture, so Roblox's `CanvasGroup` limits apply. Very large groups can look blurry on low-memory devices, and a descendant's `UIStroke` or shadow that extends past the group's bounds is clipped. Use `FadeGroup` where a whole-subtree fade or tint is needed, not as a general-purpose container.
+
+## Theme values
+
+`FadeGroup` is not themeable. It renders fully visible and untinted unless `GroupTransparency` or `GroupColor3` is set.

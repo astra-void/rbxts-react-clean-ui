@@ -16,8 +16,17 @@ Implementation notes for src/Helpers, src/Interfaces, src/Contexts and src/Provi
 - `resolveBackgroundGradient` takes a `Partial<CssBackgroundGradient>`, so `Gradient` can pass a merged `IntentScheme.backgroundGradient` straight through. It returns `undefined` when `value` is `undefined`, `colors` is unset, or `colors` is an empty array. Keep that guard here, where the partial is resolved, rather than at call sites. `buildColorSequence` indexes `colors[0]`, so it must never see an empty array.
 - `buildColorSequence` always forces the first color to Time `0` and the last to Time `1`, because Roblox rejects a `ColorSequence` otherwise. As a result, the first and last `stops` entries are always overridden. It then sorts keypoints by Time, because Roblox also throws on non-ascending times (out-of-order interior `stops`). The sort tie-breaks on array index because Luau's `table.sort` isn't stable, so colors that share a Time keep their authored order.
 
+## src/Helpers/element.helper.ts
+
+- `ElementHelper.cloneWithEvents(element, props, events)` clones an element and adds event handlers. The original handler runs first, then the new one. Use it instead of `React.cloneElement(child, { Event: {...} })` whenever the child may be a native element. `@rbxts/react` only turns `Event={{...}}` into `React.Event.*` keys inside its own `createElement`. `cloneElement` skips that step, so a raw `Event` table on a host element is assigned as `instance.Event` and throws, unmounting the root. The same applies to reading a native child's existing handler: it lives under `props[React.Event.Name]`, and `props.Event` is always `undefined`. Component children still get a merged `Event` table, because that is what they receive and forward.
+- `React.Event` isn't in `@rbxts/react`'s typings, so `getEventKey` reaches it through a cast. The keys are cached per event name by react-lua, so they compare equal to the ones `createElement` produced.
+
 ## src/Helpers/gui.helper.ts
 
+- `getGuiRoot` returns the parent of the element's outermost `LayerCollector` (PlayerGui, CoreGui, PluginGuiService, StarterGui, ...). It used to return PlayerGui whenever the game was running and otherwise require a PluginGuiService ancestor, throwing `"No root"` for anything under CoreGui (where the Studio tests mount).
+- `isGuiObjectHitAtPoint`: rect contains the point, the object and every `GuiObject` ancestor are `Visible`, no ancestor with `ClipsDescendants` (or a `CanvasGroup`) clips the point away, and the nearest `LayerCollector` is `Enabled` and not a `SurfaceGuiBase` (3D GUIs' absolute rects are in surface space, not screen space). Rotation is ignored. An object with no `LayerCollector` ancestor isn't drawn, so it never hits.
+- `isRenderedAbove(a, b)` compares two objects' draw order without walking the whole GUI tree. `getGuiRenderOrder` would be too slow to run on every mouse move. Different surfaces: `ScreenGui.DisplayOrder` (0 for other `LayerCollector`s), then tree order. Same surface, `Global`: own `ZIndex`, then descendants above ancestors, then tree order. Same surface, `Sibling`: descendants above ancestors, then the `ZIndex` of the two diverging sibling branches, then child index. Tree order means the child index of the diverging branches under the lowest common ancestor, with the later child on top. Non-`GuiObject` branches (e.g. a `Folder`) fall back to child index. Callers should scan with it rather than sort, because Luau's `table.sort` isn't stable.
+- `getGuiObjectsAtPosition` is kept for API compatibility, but Draggable no longer uses it. It only searches under the highest `Frame` ancestor and sorts by `ZIndex` alone.
 - `getGuiRenderOrder`: both sorts tie-break on child index (`rootIndex` for surfaces, `siblingIndex` for siblings) because Luau's `table.sort` is not stable. Without that, siblings with equal `DisplayOrder`/`ZIndex` come out in arbitrary order. A nested `LayerCollector` becomes its own render surface and is not recursed into from its parent surface.
 
 ## src/Helpers/size.helper.ts
@@ -39,3 +48,14 @@ Implementation notes for src/Helpers, src/Interfaces, src/Contexts and src/Provi
 ## src/Contexts/breakpoint.context.ts
 
 - `BreakpointContext`, `useBreakpoint` and `useBreakpointValue` are specified with their provider in [layout/breakpointprovider.md](../specifications/components/layout/breakpointprovider.md), including the implementation notes on hook ordering and the camera/viewport fallback.
+
+## src/Contexts/draggable.context.ts
+
+- `DragEventInfo` is the trailing argument of every Draggable/Droppable callback. `inputType` is the input that *started* the drag, not the one that triggered the callback (that one is in `input`).
+- `DragStateContext` (`{ preview, dragging }`, default both `false`) is provided by `Draggable`. `preview` is `true` inside the overlay drag preview, where `Draggable.Handle`, `Droppable` and nested `Draggable` go inert and `Tooltip` never opens. `dragging` is `true` inside an original whose drag is in progress (OR-ed down through nested Draggables), where `Tooltip` stays closed. Anything that attaches interaction to the dragged content should read it the same way. See [layout/draggable.md](../specifications/components/layout/draggable.md).
+
+## src/Providers/registry.provider.tsx
+
+- `createRegistry()` builds a standalone registry. `RegistryProvider` creates one per provider instance (kept in state, so the context value is stable across renders; it used to be rebuilt every render, which re-ran every registration effect). `GlobalRegistry` is a module-level instance shared by every React root in the Luau VM.
+- Draggable and Droppable register in both `GlobalRegistry` and the context registry (when present), and Draggable looks up droppables and active drags in `GlobalRegistry` only. That keeps drag/drop working with no provider and across separate React roots, while `registry.get(instance, DroppableRegistryKey)` on a provider's registry still works.
+- `DroppableRegistration.dragEnter`/`dragLeave` are optional and `drop`'s `info` is optional, so registrations built by hand against the old shape still type-check.

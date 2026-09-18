@@ -65,6 +65,47 @@ function waitForLayout(resolve, failureMessage)
 	end
 	return Assert:fail(failureMessage)
 end
+local function settleFrames(count)
+	do
+		local frame = 0
+		local _shouldIncrement = false
+		while true do
+			if _shouldIncrement then
+				frame += 1
+			else
+				_shouldIncrement = true
+			end
+			if not (frame < count) then
+				break
+			end
+			task.wait()
+		end
+	end
+end
+local function waitForRemoval(host, name, frames)
+	if frames == nil then
+		frames = 120
+	end
+	do
+		local attempt = 0
+		local _shouldIncrement = false
+		while true do
+			if _shouldIncrement then
+				attempt += 1
+			else
+				_shouldIncrement = true
+			end
+			if not (attempt < frames) then
+				break
+			end
+			if host:FindFirstChild(name, true) == nil then
+				return nil
+			end
+			task.wait()
+		end
+	end
+	Assert:fail(`Timed out waiting for "{name}" to be removed from {host:GetFullName()}`)
+end
 local function waitForDescendant(root, name, predicate, failureMessage)
 	local _exp = function()
 		local found = root:FindFirstChild(name, true)
@@ -294,6 +335,8 @@ return {
 	mountInScreenGui = mountInScreenGui,
 	withMounted = withMounted,
 	waitForLayout = waitForLayout,
+	settleFrames = settleFrames,
+	waitForRemoval = waitForRemoval,
 	waitForDescendant = waitForDescendant,
 	waitForGuiObject = waitForGuiObject,
 	findDescendant = findDescendant,

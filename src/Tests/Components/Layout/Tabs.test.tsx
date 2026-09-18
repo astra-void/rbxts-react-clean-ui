@@ -6,8 +6,8 @@ import { Tabs } from "../../../Components/Layout/Tabs";
 import { Text } from "../../../Components/Typography/Text";
 import { ThemeProvider } from "../../../Providers/theme.provider";
 import { DefaultTheme, ThemeTemplate, extendTheme } from "../../../Theme";
+import { activateButton } from "../../Helpers/fiber";
 import {
-	MountedElement,
 	STUDIO_SKIP_MESSAGE,
 	assertAllDescendantsContained,
 	assertContained,
@@ -35,6 +35,7 @@ interface TabsFixtureProps {
 	value?: string;
 	onValueChange?: (value: string) => void;
 	fill?: boolean;
+	bodyLayoutOrder?: number;
 }
 
 function tabsFixture(props: TabsFixtureProps = {}) {
@@ -45,7 +46,7 @@ function tabsFixture(props: TabsFixtureProps = {}) {
 				<Tabs.Title value="two" text="Two" />
 				<Tabs.Title value="three" text="Three" />
 			</Tabs.List>
-			<Tabs.Body>
+			<Tabs.Body LayoutOrder={props.bodyLayoutOrder}>
 				<Tabs.Content value="one">
 					<Text text="Panel one" />
 				</Tabs.Content>
@@ -122,38 +123,6 @@ function waitForButton(host: Instance, value: string): ImageButton {
 	return waitForGuiObject<ImageButton>(host, `TabButton-${value}`);
 }
 
-interface HostFiber {
-	child?: HostFiber;
-	sibling?: HostFiber;
-	stateNode?: unknown;
-	memoizedProps?: Map<unknown, unknown>;
-}
-
-function findHostFiber(mounted: MountedElement, instance: Instance): HostFiber {
-	const internalRoot = (mounted.root as unknown as { _internalRoot: { current: HostFiber } })._internalRoot;
-	const pending: HostFiber[] = [internalRoot.current];
-
-	while (pending.size() > 0) {
-		const fiber = pending.pop()!;
-		if (fiber.stateNode === instance) return fiber;
-		if (fiber.child !== undefined) pending.push(fiber.child);
-		if (fiber.sibling !== undefined) pending.push(fiber.sibling);
-	}
-
-	return Assert.fail(`Expected a mounted host fiber for ${instance.GetFullName()}`);
-}
-
-function activateButton(mounted: MountedElement, button: ImageButton) {
-	const activatedKey = (React as unknown as { Event: Record<string, unknown> }).Event.Activated;
-	const handler = findHostFiber(mounted, button).memoizedProps?.get(activatedKey) as
-		| ((rbx: ImageButton, input: unknown, clickCount: number) => void)
-		| undefined;
-
-	Assert.notUndefined(handler, `Expected ${button.Name} to have an Activated handler`);
-	handler!(button, {}, 1);
-	task.wait();
-}
-
 function settleFrames(count: number) {
 	for (let frame = 0; frame < count; frame++) {
 		task.wait();
@@ -167,7 +136,9 @@ function titleTextOf(button: ImageButton): TextLabel {
 @Tag("Studio")
 class TabsMountValidation {
 	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
-	@DisplayName("Without defaultValue the first declared tab claims the selection, so only its panel is visible and the rest stay mounted but hidden")
+	@DisplayName(
+		"Without defaultValue the first declared tab claims the selection, so only its panel is visible and the rest stay mounted but hidden",
+	)
 	@Test
 	public firstTabSelectedByDefault() {
 		withMounted(400, 300, tabsFixture(), (mounted) => {
@@ -234,7 +205,9 @@ class TabsMountValidation {
 	}
 
 	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
-	@DisplayName("In controlled mode the visible panel is whatever value says, and re-rendering with a new value moves it")
+	@DisplayName(
+		"In controlled mode the visible panel is whatever value says, and re-rendering with a new value moves it",
+	)
 	@Test
 	public controlledFollowsValue() {
 		withMounted(400, 300, tabsFixture({ value: "two" }), (mounted) => {
@@ -249,7 +222,9 @@ class TabsMountValidation {
 	}
 
 	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
-	@DisplayName("Clicking another title in controlled mode reports it through onValueChange but keeps the panel until value is fed back")
+	@DisplayName(
+		"Clicking another title in controlled mode reports it through onValueChange but keeps the panel until value is fed back",
+	)
 	@Test
 	public controlledClickOnlyReports() {
 		const reported: string[] = [];
@@ -342,7 +317,9 @@ class TabsMountValidation {
 	}
 
 	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
-	@DisplayName("With a positive button.borderThickness each tab gets an inner Stroke coloured by its own state's borderColor")
+	@DisplayName(
+		"With a positive button.borderThickness each tab gets an inner Stroke coloured by its own state's borderColor",
+	)
 	@Test
 	public strokePerState() {
 		withMounted(400, 300, themed(stateTheme(3), { defaultValue: "one" }), (mounted) => {
@@ -360,7 +337,9 @@ class TabsMountValidation {
 	}
 
 	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
-	@DisplayName("A state-level borderThickness overrides button.borderThickness and can add a Stroke to that state alone")
+	@DisplayName(
+		"A state-level borderThickness overrides button.borderThickness and can add a Stroke to that state alone",
+	)
 	@Test
 	public stateBorderThickness() {
 		const theme = extendTheme(stateTheme(0), {
@@ -378,7 +357,9 @@ class TabsMountValidation {
 	}
 
 	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
-	@DisplayName("Only the state that defines a backgroundGradient renders a UIGradient, and it moves with the selection")
+	@DisplayName(
+		"Only the state that defines a backgroundGradient renders a UIGradient, and it moves with the selection",
+	)
 	@Test
 	public gradientPerState() {
 		withMounted(400, 300, themed(stateTheme(0), { defaultValue: "one" }), (mounted) => {
@@ -407,11 +388,18 @@ class TabsMountValidation {
 	}
 
 	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
-	@DisplayName("A per-corner button.cornerRadius sets each UICorner corner, falling back to list.cornerRadius for unset corners")
+	@DisplayName(
+		"A per-corner button.cornerRadius sets each UICorner corner, falling back to list.cornerRadius for unset corners",
+	)
 	@Test
 	public perCornerRadius() {
 		const theme = extendTheme(DefaultTheme, {
-			components: { tabs: { list: { cornerRadius: 6 }, button: { cornerRadius: { topLeft: 8, topRight: 10, bottomLeft: 0 } } } },
+			components: {
+				tabs: {
+					list: { cornerRadius: 6 },
+					button: { cornerRadius: { topLeft: 8, topRight: 10, bottomLeft: 0 } },
+				},
+			},
 		});
 
 		withMounted(400, 300, themed(theme, { defaultValue: "one" }), (mounted) => {
@@ -441,7 +429,9 @@ class TabsMountValidation {
 	}
 
 	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
-	@DisplayName("Tabs.List fill switches the title row to a non-wrapping Fill layout and gives every title the same width")
+	@DisplayName(
+		"Tabs.List fill switches the title row to a non-wrapping Fill layout and gives every title the same width",
+	)
 	@Test
 	public listFillShares() {
 		withMounted(400, 300, tabsFixture({ defaultValue: "one", fill: true }), (mounted) => {
@@ -456,14 +446,20 @@ class TabsMountValidation {
 			const buttons = TAB_VALUES.map((value) => waitForButton(list, value));
 			for (const button of buttons) {
 				Assert.equal(button.AutomaticSize, Enum.AutomaticSize.Y);
-				Assert.notUndefined(button.FindFirstChild("TitleLayout"), `Expected ${button.Name} to centre its text with TitleLayout`);
+				Assert.notUndefined(
+					button.FindFirstChild("TitleLayout"),
+					`Expected ${button.Name} to centre its text with TitleLayout`,
+				);
 			}
 
 			waitForLayout(
 				() => (math.abs(rect(buttons[0]).width - rect(buttons[2]).width) <= 1 ? true : undefined),
 				`Timed out waiting for fill titles to share a width (one=${rect(buttons[0]).width}, three=${rect(buttons[2]).width})`,
 			);
-			Assert.true(math.abs(rect(buttons[1]).width - rect(buttons[0]).width) <= 1, "Expected every fill title to be the same width");
+			Assert.true(
+				math.abs(rect(buttons[1]).width - rect(buttons[0]).width) <= 1,
+				"Expected every fill title to be the same width",
+			);
 		});
 	}
 
@@ -499,7 +495,9 @@ class TabsMountValidation {
 	}
 
 	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
-	@DisplayName("tabs.gap sets the Padding of the root VStack between the list and the body, including negative overlap")
+	@DisplayName(
+		"tabs.gap sets the Padding of the root VStack between the list and the body, including negative overlap",
+	)
 	@Test
 	public tabsGap() {
 		const theme = extendTheme(DefaultTheme, { components: { tabs: { gap: -3 } } });
@@ -525,12 +523,38 @@ class TabsMountValidation {
 			Assert.notUndefined(stroke, "Expected the default theme's TabsBody to carry a Stroke");
 			Assert.equal(stroke!.Thickness, DefaultTheme.components.tabs.borderThickness);
 
-			mounted.update(themed(extendTheme(DefaultTheme, { components: { tabs: { borderThickness: 0 } } }), { defaultValue: "one" }));
+			mounted.update(
+				themed(extendTheme(DefaultTheme, { components: { tabs: { borderThickness: 0 } } }), {
+					defaultValue: "one",
+				}),
+			);
 
 			waitForLayout(
 				() => (body.FindFirstChild("Stroke") === undefined ? true : undefined),
 				"Timed out waiting for TabsBody to drop its Stroke with borderThickness 0",
 			);
+		});
+	}
+
+	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	@DisplayName("A LayoutOrder passed to Tabs.Body lands on the TabsBody ImageLabel")
+	@Test
+	public bodyLayoutOrder() {
+		withMounted(400, 300, tabsFixture({ defaultValue: "one", bodyLayoutOrder: 5 }), (mounted) => {
+			waitForSelectedContent(mounted.host, "one");
+
+			Assert.equal(findDescendant<ImageLabel>(mounted.host, "TabsBody").LayoutOrder, 5);
+		});
+	}
+
+	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	@DisplayName("Without a LayoutOrder prop TabsBody keeps the engine default of 0")
+	@Test
+	public bodyLayoutOrderDefault() {
+		withMounted(400, 300, tabsFixture({ defaultValue: "one" }), (mounted) => {
+			waitForSelectedContent(mounted.host, "one");
+
+			Assert.equal(findDescendant<ImageLabel>(mounted.host, "TabsBody").LayoutOrder, 0);
 		});
 	}
 }

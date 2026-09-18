@@ -9,18 +9,16 @@ local DraggableRegistryKey = {
 	name = "Draggable",
 }
 local RegistryContext = React.createContext(nil)
-local function RegistryProvider(props)
-	local entries = React.useRef({})
+local function createRegistry()
+	local entries = {}
 	local register = function(guiObject, key, value)
-		local _current = entries.current
 		local _name = key.name
-		local keyEntries = _current[_name]
+		local keyEntries = entries[_name]
 		if keyEntries == nil then
 			keyEntries = {}
-			local _current_1 = entries.current
 			local _name_1 = key.name
 			local _keyEntries = keyEntries
-			_current_1[_name_1] = _keyEntries
+			entries[_name_1] = _keyEntries
 		end
 		local _keyEntries = keyEntries
 		local _guiObject = guiObject
@@ -28,9 +26,8 @@ local function RegistryProvider(props)
 		_keyEntries[_guiObject] = _value
 	end
 	local unregister = function(guiObject, key)
-		local _current = entries.current
 		local _name = key.name
-		local keyEntries = _current[_name]
+		local keyEntries = entries[_name]
 		if keyEntries == nil then
 			return nil
 		end
@@ -43,15 +40,13 @@ local function RegistryProvider(props)
 		end
 		-- ▲ ReadonlyMap.size ▲
 		if _size == 0 then
-			local _current_1 = entries.current
 			local _name_1 = key.name
-			_current_1[_name_1] = nil
+			entries[_name_1] = nil
 		end
 	end
 	local get = function(guiObject, key)
-		local _current = entries.current
 		local _name = key.name
-		local _result = _current[_name]
+		local _result = entries[_name]
 		if _result ~= nil then
 			local _guiObject = guiObject
 			_result = _result[_guiObject]
@@ -59,9 +54,8 @@ local function RegistryProvider(props)
 		return _result
 	end
 	local getAll = function(key)
-		local _current = entries.current
 		local _name = key.name
-		local keyEntries = _current[_name]
+		local keyEntries = entries[_name]
 		if keyEntries == nil then
 			return {}
 		end
@@ -74,13 +68,17 @@ local function RegistryProvider(props)
 	local GetNextId = function()
 		return HttpService:GenerateGUID(false)
 	end
-	local contextValue = {
+	return {
 		register = register,
 		unregister = unregister,
 		get = get,
 		getAll = getAll,
 		GetNextId = GetNextId,
 	}
+end
+local GlobalRegistry = createRegistry()
+local function RegistryProvider(props)
+	local contextValue = React.useState(createRegistry)
 	return React.createElement(RegistryContext.Provider, {
 		value = contextValue,
 	}, props.children)
@@ -114,9 +112,11 @@ local function useRegistryRegistration(key, createRegistration, dependencies)
 	}
 end
 return {
+	createRegistry = createRegistry,
 	RegistryProvider = RegistryProvider,
 	useRegistryRegistration = useRegistryRegistration,
 	DroppableRegistryKey = DroppableRegistryKey,
 	DraggableRegistryKey = DraggableRegistryKey,
 	RegistryContext = RegistryContext,
+	GlobalRegistry = GlobalRegistry,
 }

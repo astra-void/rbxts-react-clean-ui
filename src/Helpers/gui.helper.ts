@@ -3,7 +3,7 @@ import {
     RunService,
 } from "@rbxts/services";
 
-type GuiRoot = StarterGui | PlayerGui;
+type GuiRoot = Instance;
 
 interface IndexedGuiObject {
     object: GuiObject;
@@ -95,21 +95,174 @@ export class GuiHelper {
     }
 
     private static getGuiRoot(instance: Instance): GuiRoot {
-        if (RunService.IsRunning()) {
+        const surface = this.findHighestAncestorOfClass<LayerCollector>(instance, "LayerCollector");
+
+        if (surface?.Parent !== undefined) {
+            return surface.Parent;
+        }
+
+        if (RunService.IsRunning() && Players.LocalPlayer !== undefined) {
             return Players.LocalPlayer.WaitForChild("PlayerGui") as PlayerGui;
         }
 
-        const r = this.findHighestAncestorOfClass(instance, "PluginGuiService");
-        if (r === undefined)
-            throw `No root`
-        return r as GuiRoot;
+        let root = instance;
+        while (root.Parent !== undefined && root.Parent !== game) {
+            root = root.Parent;
+        }
+
+        return root;
+    }
+
+    public static getRenderSurface(instance: Instance): LayerCollector | undefined {
+        return instance.FindFirstAncestorWhichIsA("LayerCollector");
+    }
+
+    public static isGuiObjectHitAtPoint(
+        guiObject: GuiObject,
+        point: Vector2,
+    ): boolean {
+        if (!guiObject.Visible || !this.isPointInsideGuiObject(guiObject, point)) {
+            return false;
+        }
+
+        let current = guiObject.Parent;
+
+        while (current !== undefined) {
+            if (current.IsA("LayerCollector")) {
+                return current.Enabled && !current.IsA("SurfaceGuiBase");
+            }
+
+            if (current.IsA("GuiObject")) {
+                if (!current.Visible) {
+                    return false;
+                }
+
+                if (
+                    (current.ClipsDescendants || current.IsA("CanvasGroup")) &&
+                    !this.isPointInsideGuiObject(current, point)
+                ) {
+                    return false;
+                }
+            }
+
+            current = current.Parent;
+        }
+
+        return false;
+    }
+
+    public static isRenderedAbove(a: GuiObject, b: GuiObject): boolean {
+        if (a === b) {
+            return false;
+        }
+
+        const surfaceA = this.getRenderSurface(a);
+        const surfaceB = this.getRenderSurface(b);
+
+        if (surfaceA !== surfaceB) {
+            const orderA = surfaceA?.IsA("ScreenGui") ? surfaceA.DisplayOrder : 0;
+            const orderB = surfaceB?.IsA("ScreenGui") ? surfaceB.DisplayOrder : 0;
+
+            if (orderA !== orderB) {
+                return orderA > orderB;
+            }
+
+            return this.isLaterInTree(surfaceA ?? a, surfaceB ?? b);
+        }
+
+        if (surfaceA?.ZIndexBehavior === Enum.ZIndexBehavior.Global && a.ZIndex !== b.ZIndex) {
+            return a.ZIndex > b.ZIndex;
+        }
+
+        if (a.IsDescendantOf(b)) {
+            return true;
+        }
+
+        if (b.IsDescendantOf(a)) {
+            return false;
+        }
+
+        if (surfaceA?.ZIndexBehavior === Enum.ZIndexBehavior.Global) {
+            return this.isLaterInTree(a, b);
+        }
+
+        const divergence = this.getDivergingAncestors(a, b);
+
+        if (divergence === undefined) {
+            return false;
+        }
+
+        const [branchA, branchB] = divergence;
+
+        if (
+            branchA.IsA("GuiObject") &&
+            branchB.IsA("GuiObject") &&
+            branchA.ZIndex !== branchB.ZIndex
+        ) {
+            return branchA.ZIndex > branchB.ZIndex;
+        }
+
+        return this.getChildIndex(branchA) > this.getChildIndex(branchB);
+    }
+
+    private static isLaterInTree(a: Instance, b: Instance): boolean {
+        const divergence = this.getDivergingAncestors(a, b);
+
+        if (divergence === undefined) {
+            return false;
+        }
+
+        return this.getChildIndex(divergence[0]) > this.getChildIndex(divergence[1]);
+    }
+
+    private static getDivergingAncestors(
+        a: Instance,
+        b: Instance,
+    ): [Instance, Instance] | undefined {
+        const branchByAncestor = new Map<Instance, Instance>();
+        let previous: Instance = a;
+        let current: Instance | undefined = a.Parent;
+
+        while (current !== undefined) {
+            branchByAncestor.set(current, previous);
+            previous = current;
+            current = current.Parent;
+        }
+
+        previous = b;
+        current = b.Parent;
+
+        while (current !== undefined) {
+            const branchA = branchByAncestor.get(current);
+
+            if (branchA !== undefined) {
+                return [branchA, previous];
+            }
+
+            previous = current;
+            current = current.Parent;
+        }
+
+        return undefined;
+    }
+
+    private static getChildIndex(instance: Instance): number {
+        const parent = instance.Parent;
+
+        if (parent === undefined) {
+            return 0;
+        }
+
+        return parent.GetChildren().indexOf(instance);
     }
 
     private static getRenderSurfaces(root: GuiRoot): RenderSurface[] {
         const surfaces = new Array<RenderSurface>();
 
         const visit = (instance: Instance) => {
-            for (const [index, child] of ipairs(instance.GetChildren())) {
+            const instanceChildren = instance.GetChildren();
+            for (let index = 0; index < instanceChildren.size(); index++) {
+                const child = instanceChildren[index];
                 if (child.IsA("LayerCollector")) {
                     surfaces.push({
                         root: child,
@@ -144,7 +297,9 @@ export class GuiHelper {
     ): void {
         const children = new Array<IndexedGuiObject>();
 
-        for (const [index, child] of ipairs(parent.GetChildren())) {
+        const parentChildren = parent.GetChildren();
+        for (let index = 0; index < parentChildren.size(); index++) {
+            const child = parentChildren[index];
             if (!child.IsA("GuiObject")) {
                 continue;
             }

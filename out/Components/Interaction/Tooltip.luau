@@ -3,6 +3,7 @@ local TS = _G[script]
 local React = TS.import(script, TS.getModule(script, "@rbxts", "react"))
 local _Contexts = TS.import(script, script.Parent.Parent.Parent, "Contexts")
 local CleanThemeContext = _Contexts.CleanThemeContext
+local DragStateContext = _Contexts.DragStateContext
 local OverlayConsumer = _Contexts.OverlayConsumer
 local Text = TS.import(script, script.Parent.Parent, "Typography").Text
 local ReactRoblox = TS.import(script, TS.getModule(script, "@rbxts", "react-roblox"))
@@ -13,6 +14,7 @@ local Padding = _Decorator.Padding
 local _Helpers = TS.import(script, script.Parent.Parent.Parent, "Helpers")
 local ColorHelper = _Helpers.ColorHelper
 local CssHelper = _Helpers.CssHelper
+local ElementHelper = _Helpers.ElementHelper
 local SpacingHelper = _Helpers.SpacingHelper
 local useTween = TS.import(script, TS.getModule(script, "@rbxts", "react-ripple").src).useTween
 local function TooltipPopup(props)
@@ -30,8 +32,7 @@ local function TooltipPopup(props)
 		left = 0,
 		right = 0,
 	}
-	local _value = theme.components.tooltip.boxShadow
-	local shadow = if _value ~= 0 and _value == _value and _value ~= "" and _value then CssHelper:parseCssShadow(theme.components.tooltip.boxShadow) else nil
+	local shadow = if theme.components.tooltip.boxShadow ~= nil and theme.components.tooltip.boxShadow ~= 0 then CssHelper:parseCssShadow(theme.components.tooltip.boxShadow) else nil
 	if shadow ~= nil then
 		resolvedPadding.top += shadow.blurRadius.Offset + shadow.spread.Y.Offset - shadow.offset.Y.Offset
 		resolvedPadding.bottom += shadow.blurRadius.Offset + shadow.spread.Y.Offset + shadow.offset.Y.Offset
@@ -178,12 +179,20 @@ end
 local function Tooltip(props)
 	local targetRef = React.useRef()
 	local hideRequest = React.useRef(0)
+	local hoveredRef = React.useRef(false)
+	local shownRef = React.useRef(false)
 	local target, setTarget = React.useState()
 	local visible, setVisible = React.useState(false)
 	local theme = React.useContext(CleanThemeContext)
+	local dragState = React.useContext(DragStateContext)
 	local fadeDuration = theme.components.tooltip.fadeDuration
-	local show = function()
-		hideRequest.current += 1
+	local suppressed = props.disabled == true or dragState.preview or dragState.dragging
+	local suppressedRef = React.useRef(suppressed)
+	suppressedRef.current = suppressed
+	local controlled = props.open ~= nil
+	local controlledRef = React.useRef(controlled)
+	controlledRef.current = controlled
+	local captureTarget = function()
 		local _result = targetRef.current
 		if _result ~= nil then
 			_result = _result.AbsolutePosition
@@ -204,9 +213,15 @@ local function Tooltip(props)
 			_object[_left_1] = _result_2
 			setTarget(_object)
 		end
+	end
+	local show = function()
+		shownRef.current = true
+		hideRequest.current += 1
+		captureTarget()
 		setVisible(true)
 	end
 	local hide = function()
+		shownRef.current = false
 		setVisible(false)
 		local request = hideRequest.current + 1
 		hideRequest.current = request
@@ -220,40 +235,53 @@ local function Tooltip(props)
 			end
 		end)
 	end
-	local _exp = props.children
-	local _object = {
+	React.useEffect(function()
+		if suppressed then
+			hoveredRef.current = false
+		end
+		local _condition = not suppressed
+		if _condition then
+			local _condition_1 = props.open
+			if _condition_1 == nil then
+				_condition_1 = hoveredRef.current
+			end
+			_condition = _condition_1
+		end
+		local wanted = _condition
+		if wanted and not shownRef.current then
+			show()
+		elseif not wanted and shownRef.current then
+			hide()
+		end
+	end, { suppressed, props.open })
+	React.useEffect(function()
+		local instance = targetRef.current
+		if not visible or instance == nil then
+			return nil
+		end
+		local positionChanged = instance:GetPropertyChangedSignal("AbsolutePosition"):Connect(captureTarget)
+		local sizeChanged = instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(captureTarget)
+		return function()
+			positionChanged:Disconnect()
+			sizeChanged:Disconnect()
+		end
+	end, { visible })
+	local child = ElementHelper:cloneWithEvents(props.children, {
 		ref = targetRef,
-	}
-	local _left = "Event"
-	local _object_1 = {}
-	local _spread = props.children.props.Event
-	if _spread then
-		for _k, _v in _spread do
-			_object_1[_k] = _v
-		end
-	end
-	_object_1.MouseEnter = function(guiObject, x, y)
-		local _result = props.children.props.Event
-		if _result ~= nil then
-			_result = _result.MouseEnter
-			if _result ~= nil then
-				_result(guiObject, x, y)
+	}, {
+		MouseEnter = function()
+			hoveredRef.current = true
+			if not controlledRef.current and not suppressedRef.current then
+				show()
 			end
-		end
-		show()
-	end
-	_object_1.MouseLeave = function(guiObject, x, y)
-		local _result = props.children.props.Event
-		if _result ~= nil then
-			_result = _result.MouseLeave
-			if _result ~= nil then
-				_result(guiObject, x, y)
+		end,
+		MouseLeave = function()
+			hoveredRef.current = false
+			if not controlledRef.current then
+				hide()
 			end
-		end
-		hide()
-	end
-	_object[_left] = _object_1
-	local child = React.cloneElement(_exp, _object)
+		end,
+	})
 	return React.createElement(React.Fragment, nil, child, target ~= nil and (React.createElement(OverlayConsumer, {
 		render = function(overlay)
 			if overlay == nil then

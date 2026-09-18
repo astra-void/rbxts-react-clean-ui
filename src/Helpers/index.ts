@@ -1,6 +1,7 @@
 export * from './breakpoint.helper';
 export * from './color.helper';
 export * from './css.helper';
+export * from './element.helper';
 export * from './gui.helper';
 export * from './input.helper';
 export * from './size.helper';

@@ -21,6 +21,8 @@ export interface MountedElement {
 export declare function mountInScreenGui(width: number, height: number, element: React.ReactElement): MountedElement;
 export declare function withMounted(width: number, height: number, element: React.ReactElement, fn: (mounted: MountedElement) => void): void;
 export declare function waitForLayout<T extends defined>(resolve: () => T | undefined, failureMessage: string): T;
+export declare function settleFrames(count: number): void;
+export declare function waitForRemoval(host: Instance, name: string, frames?: number): void;
 export declare function waitForDescendant<T extends Instance>(root: Instance, name: string, predicate: (instance: T) => boolean, failureMessage?: string): T;
 export declare function waitForGuiObject<T extends GuiObject>(root: Instance, name: string, predicate?: (gui: T) => boolean, failureMessage?: string): T;
 export declare function findDescendant<T extends Instance>(root: Instance, name: string): T;

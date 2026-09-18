@@ -1,43 +1,53 @@
 # Droppable
 
-`Droppable` marks a GUI element as a valid drop target for `Draggable` (see [draggable.md](./draggable.md)). It follows the shared conventions in [Components](../index.md) and the layout-wide notes in [Layout](./index.md).
+`Droppable` marks a GUI element as a drop target for `Draggable` (see [draggable.md](./draggable.md)). It follows the shared conventions in [Components](../index.md) and the layout-wide notes in [Layout](./index.md).
 
-`Droppable` is the passive half of the drag-and-drop pair: it does not initiate or track any drag state of its own. It exists to register a `GuiObject` in the shared registry so a `Draggable` can find it by position and to expose which `GuiObject` was dropped on it.
+`Droppable` is the passive half of the drag-and-drop pair: it tracks no drag state of its own. It registers a `GuiObject` so a `Draggable` can find it by position, and forwards drop/hover notifications to its callbacks.
 
 ## Public API
 
-- `Droppable` accepts a single `children: ReactElement<GuiObjectProps>` — the element that defines the drop area's bounds. This element is cloned, not wrapped: `Droppable` does not introduce an extra `Frame` around it.
-- `id?: string` is an opaque identifier stored on this droppable's registry entry and surfaced to `Draggable`'s `onDragged`/`onDropped` callbacks as `DroppableRegistration.id`, so a draggable can distinguish which target it is over/was dropped on.
-- `onDrop?: (draggedObject: GuiObject) => void` fires with the dragged `GuiObject` instance whenever a `Draggable` reports this droppable as being under the pointer — both while dragging (on every pointer move) and at drop time. There is no separate "drag entered" / "drag left" callback; a consumer wanting hover-only feedback must track drag position itself (see below).
-- There is no `disabled` prop and no visual/theme surface of its own — a `Droppable` renders exactly its child, with no added decoration. Any hover/active styling is the consumer's responsibility.
+- `DroppableProps` (exported):
+  - `children: ReactElement<GuiObjectProps>` — the element that defines the drop area's bounds. It is cloned, not wrapped.
+  - `id?: string` — stored on the registration and surfaced to `Draggable`'s `onDragged`/`onDropped` as `DroppableRegistration.id`.
+  - `onDrop?: (draggedObject: GuiObject, info?: DragEventInfo) => void` — fires exactly once when a drag is released over this target and it is the topmost target there. Never fires while the pointer only moves. `info` (see draggable.md) carries the `UserInputType` that started the drag and the `Draggable`'s `id`; it is always present when a `Draggable` fires the drop and only missing when something calls `registration.drop(obj)` directly.
+  - `onDragEnter?: (draggedObject: GuiObject, info: DragEventInfo) => void` — fires when a drag moves onto this target and it becomes the topmost target under the pointer.
+  - `onDragLeave?: (draggedObject: GuiObject, info: DragEventInfo) => void` — fires when this target stops being the hovered topmost target: the pointer moves off it or onto a target drawn above it, the drag is released (after `onDrop`, if it got the drop), or the dragging `Draggable` unmounts. Every enter is paired with one leave.
+- `DroppableRegistration` (from Providers): `{ guiObject, id?, drop(draggedObject, info?), dragEnter?(draggedObject, info), dragLeave?(draggedObject, info) }`.
+- No `disabled` prop and no visuals of its own; hover styling is the consumer's job, typically driven by `onDragEnter`/`onDragLeave`.
 
 ## Registration
 
-- On mount, `Droppable` registers its (cloned) child's underlying `GuiObject` in the shared registry under `DroppableRegistryKey` via `useRegistryRegistration`, storing `{ guiObject, id, drop }`. It unregisters on unmount or whenever `id`/`onDrop` changes (the registration is recreated when either dependency changes).
-- Requires a `RegistryProvider` ancestor (shared with `Draggable`); without one, registration silently no-ops.
-- `Droppable` provides `DroppableContext` to its subtree with `{ registration }` — the same registration object stored in the registry. This lets a custom child (or a component nested inside the `Droppable`, such as a hover-highlight wrapper) read its own registration and compare it against a `DroppableRegistration` obtained elsewhere (e.g. from a `Draggable`'s `onDragged` callback) to determine whether *this specific* droppable is the one currently hovered — this is the supported pattern for hover-only visual feedback, since `onDrop` alone does not distinguish hover from drop.
+- On mount, `Droppable` registers its child's instance under `DroppableRegistryKey` in the shared module-level registry (`GlobalRegistry`), and also in the nearest `RegistryProvider`'s registry if there is one. It unregisters on unmount and re-registers when `id` changes. No provider is required.
+- Changing `onDrop`/`onDragEnter`/`onDragLeave` does not re-register; the latest callbacks are always used.
+- A `Droppable` rendered inside a `Draggable`'s drag preview does not register, so a dragged item can't be dropped onto its own preview.
+- `Droppable` provides `DroppableContext` (`{ registration }`) to its subtree, so a custom child can compare its own registration with the one reported by `Draggable.onDragged`.
 
 ## Drop detection semantics
 
-- `onDrop` is invoked by whichever `Draggable` currently has the pointer over this droppable's bounds. Detection is bounds-based (`Draggable` scans all visible descendants of the drag root's outermost `Frame` for ones whose absolute rectangle contains the pointer position), not `Droppable`-initiated.
-- If multiple registered `Droppable`s overlap at the pointer position, **all** of them receive `onDrop` for that same pointer position/frame, not just the top-most one by `ZIndex`. Only the `DroppableRegistration` reported back to the dragging `Draggable`'s own `onDragged`/`onDropped` is limited to a single registration (the one processed last, which is the lowest-`ZIndex` match, not necessarily the top-most). Design drop zones to avoid overlap if this ambiguity matters — treat this as a documented quirk of the current implementation rather than a per-`Droppable` topmost-wins guarantee.
-- `onDrop` fires purely based on pointer position; it does not filter by which `Draggable` is being dragged, its `id`, or any accept/reject predicate. Accepting or rejecting a specific dragged item is the consumer's responsibility inside `onDrop` (e.g. by inspecting the dragged `GuiObject` or, from the `Draggable` side, the `DroppableRegistration.id`).
+- Detection is done by the dragging `Draggable` (see draggable.md "Drop-target detection"): the pointer must be inside the target's rect, the target must be effectively visible and not clipped at that point, and among overlapping targets only the one drawn on top (DisplayOrder, ZIndex, ZIndexBehavior, sibling and ancestor order) is notified.
+- Detection doesn't filter by which `Draggable` is dragged; accept/reject in `onDrop` using `info.id` or the dragged `GuiObject`.
 
 ## Layout
 
-- `Droppable` does not affect its child's size or position; it is purely a registration/context wrapper.
+- `Droppable` does not affect its child's size or position.
 
 ## Theme
 
-`Droppable` has no dedicated theme entry — it renders no additional visuals.
+`Droppable` has no theme entry.
 
 ## Story
 
-Since `Draggable` and `Droppable` are usually demonstrated together, the `Droppable`-specific behavior worth covering in a shared drag/drop story is:
-- A `Droppable` that highlights only while a drag is hovering over it specifically (using `DroppableContext` to compare against the currently-hovered registration from `Draggable.onDragged`), demonstrating hover feedback is a consumer responsibility rather than built in.
-- A rejected drop: dragging an item and releasing it somewhere with no `Droppable` underneath, showing `onDrop`/`onDropped` are simply not called.
-- Two overlapping or adjacent `Droppable`s with distinct `id`s so a consumer can show routing behavior (e.g. one accepts the item, one deletes it) based on `id`.
+Covered by the shared drag/drop story (see draggable.md):
+- A `Droppable` highlighted through `onDragEnter`/`onDragLeave`.
+- A rejected drop: releasing with no `Droppable` underneath calls neither `onDrop` nor anything else.
+- Two overlapping `Droppable`s with distinct `id`s where only the top one receives the drop.
 
 ## Loom
 
-- Reuse the same Loom scene as `Draggable` (see draggable.md) — `Droppable` has no independent scene of its own, since it only makes sense demonstrated alongside a `Draggable`.
+- Reuses the `Draggable` Loom scene.
+
+## Implementation notes
+
+- `Droppable` doesn't use `useRegistryRegistration` any more: it needs to register in two registries and skip registration in the drag preview. The hook is still exported unchanged.
+- The registration's `drop`/`dragEnter`/`dragLeave` read the latest props through `propsRef`, and the registration object is memoised on `[guiObject, id]` only. Recreating it on every callback change (as the old `[id, onDrop]` deps did with inline lambdas) would re-register every render.
+- On cleanup, `GlobalRegistry` is only cleared if it still holds this exact registration, so a quick remount on the same instance isn't wiped by the old cleanup.

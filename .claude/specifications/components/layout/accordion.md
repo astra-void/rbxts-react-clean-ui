@@ -4,8 +4,13 @@
 
 ## Public API
 
-- `Accordion` accepts `children`, `defaultValue`, `value`, `onValueChange`, and `collapsible` props in addition to the scalable element props used by other layout components.
+- `Accordion` accepts `children`, `defaultValue`, `value`, `onValueChange`, `collapsible`, `multiple`, `autoSize`, `keepMounted`, `animationDuration`, and `name` props in addition to the scalable element props used by other layout components.
+- `multiple` (default `false`) selects the mode. The component's props are `AccordionProps | AccordionMultipleProps`, discriminated on `multiple`:
+  - Single mode, `AccordionProps` (`multiple` omitted or `false`): `defaultValue`/`value` are `string`, and `onValueChange` receives `string | undefined` (`undefined` when the open section was collapsed).
+  - Multiple mode, `AccordionMultipleProps` (`multiple={true}`, must be a literal `true` for the types to narrow): `defaultValue`/`value` are `string[]`, and `onValueChange` receives the complete next `string[]` of open values, ordered by item order.
 - `onValueChange` receives the complete next value after a section is opened or closed.
+- `autoSize` (default `false`): see Layout.
+- `keepMounted` (default `false`): see Expansion behavior.
 - Supplying `value` makes the accordion controlled. Without `value`, the accordion owns its state and initializes it from `defaultValue`.
 - `collapsible` defaults to `false` in single mode. When `false`, activating the open section does not close it. Multiple mode always permits individual sections to be collapsed.
 - The component exposes `Accordion.Item`, `Accordion.Header`, and `Accordion.Content` child components.
@@ -29,7 +34,9 @@
 - Controlled and uncontrolled accordions follow the same interaction rules. In controlled mode, interaction calls `onValueChange` but the rendered state changes only when the consumer supplies a new `value`.
 - Values in `value` or `defaultValue` that do not match a rendered item are ignored.
 - If items change, open values for removed items are discarded from uncontrolled state and omitted from the next change notification.
-- The expanded content is mounted only while its item is open. Closing an item unmounts its content after any closing animation completes.
+- By default the expanded content is mounted only while its item is open. Closing an item unmounts its content after any closing animation completes.
+- With `keepMounted`, every item's content is mounted from the first render and never unmounted by closing. A closed item's content is collapsed to zero height and made invisible (so it cannot be seen, clicked, or gamepad-selected), and its component state survives close/reopen. Opening and closing animate exactly as in the default mode.
+- In single mode, if more than one value is supplied at runtime (e.g. after switching `multiple` off), only the first matching value is treated as open.
 
 ## Input and feedback
 
@@ -41,7 +48,9 @@
 
 ## Layout
 
-- The accordion height should fill its parent.
+- By default the accordion fills its parent (100% width and height) and clips its content.
+- With `autoSize`, the accordion still fills its parent's width but its height is automatic from its items, so it grows and shrinks as sections open and close (following the height animation) instead of filling the parent's height.
+- Items always size their height to their header plus their (animated) content height, in both modes.
 - Items are arranged vertically and fill the accordion's available width.
 - Headers use automatic height based on their content and fill the available width.
 - Header content is aligned horizontally, with the label area filling remaining space and the expand indicator aligned to the trailing edge.
@@ -82,9 +91,19 @@ The story should demonstrate:
 - Collapsible single-mode behavior.
 - A disabled item and content with different heights.
 
-Custom story controls should be limited to `collapsible`, and animation enabled or disabled.
+The story should also demonstrate the opt-in modes: `multiple` (several sections open at once), `autoSize` (the accordion's height following its content rather than the fixed-height story container), and `keepMounted` (content holding local state, e.g. a counter or text input, that survives closing and reopening its section).
+
+Custom story controls should be limited to `collapsible`, `multiple`, `autoSize`, `keepMounted`, and animation enabled or disabled.
 
 ## Loom
 
 - The Loom scene uses a fixed-width `Container` with enough height to show one expanded section without clipping.
 - It demonstrates three items, with the first item initially expanded and one item disabled.
+
+## Implementation notes
+
+- The exported `AccordionProps` stays the original single-mode interface (plus `multiple?: false` and the new opt-in props) so `interface X extends AccordionProps` and existing `(value: string | undefined)` callbacks still compile; multiple mode is the separate exported `AccordionMultipleProps`, and the component takes `AccordionProps | AccordionMultipleProps`. Widening `onValueChange` to a `string | string[]` parameter would have broken existing typed callbacks.
+- Instance tree per item: `AccordionItem-<value>` (imagelabel) > `AccordionHeaderButton-<value>` and, when mounted, `ContentClip` (frame, `ClipsDescendants`, height tweened) > `Content` (frame, `AutomaticSize` Y). Opened/closed state is observable through `ContentClip.Visible` and its height; with the default mode a closed item has no `ContentClip` at all.
+- `RenderedAccordionItem` height goal normally comes from the `Content` frame's `AbsoluteSize` change handler. With `keepMounted` the content is already measured when reopened, so no change fires; the `props.open` effect therefore also re-reads `contentRef`'s `AbsoluteSize.Y` and sets the goal. This also fixes reopening a section mid-close in the default mode, which previously left `ContentClip` stuck at height 0.
+- `keepMounted` hides closed content with `ContentClip.Visible={mounted}` in addition to the zero height: a zero-height clip alone still leaves the content gamepad-selectable. The `mounted` state still means "open or animating closed".
+- `autoSize` only drops the root's `height="100%"` and sets `AutomaticSize` Y; items were already `AutomaticSize` Y via `Container width="100%"`, so the root follows the tweened `ContentClip` heights and the animation still works.

@@ -239,6 +239,7 @@ interface TabsBodyProps extends ScalableElementProps {
     backgroundImage?: CssBackgroundImage;
     backgroundGradient?: CssBackgroundGradient;
     children?: React.ReactNode;
+    LayoutOrder?: number;
 }
 
 const TabsBody = React.forwardRef<ImageLabel, TabsBodyProps>(
@@ -250,6 +251,7 @@ const TabsBody = React.forwardRef<ImageLabel, TabsBodyProps>(
                 name="TabsBody"
                 ref={ref}
                 width="100%"
+                LayoutOrder={props.LayoutOrder}
                 backgroundImage={props.backgroundImage ?? theme.components.tabs.backgroundImage}>
                 {theme.components.tabs.borderThickness > 0 && (
                     <uistroke

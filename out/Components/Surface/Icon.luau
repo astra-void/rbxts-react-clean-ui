@@ -30,6 +30,7 @@ local function SpinningIcon(props)
 	_attributes.BorderSizePixel = 0
 	_attributes.Size = UDim2.fromOffset(0, 0)
 	_attributes.AutomaticSize = Enum.AutomaticSize.XY
+	_attributes.LayoutOrder = props.LayoutOrder
 	return React.createElement("frame", _attributes, React.createElement(Icon, {
 		Size = props.Size,
 		color = props.color,

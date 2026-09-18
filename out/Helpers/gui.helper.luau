@@ -64,20 +64,152 @@ do
 		return result
 	end
 	function GuiHelper:getGuiRoot(instance)
-		if RunService:IsRunning() then
+		local surface = self:findHighestAncestorOfClass(instance, "LayerCollector")
+		local _result = surface
+		if _result ~= nil then
+			_result = _result.Parent
+		end
+		if _result ~= nil then
+			return surface.Parent
+		end
+		if RunService:IsRunning() and Players.LocalPlayer ~= nil then
 			return Players.LocalPlayer:WaitForChild("PlayerGui")
 		end
-		local r = self:findHighestAncestorOfClass(instance, "PluginGuiService")
-		if r == nil then
-			error(`No root`)
+		local root = instance
+		while root.Parent ~= nil and root.Parent ~= game do
+			root = root.Parent
 		end
-		return r
+		return root
+	end
+	function GuiHelper:getRenderSurface(instance)
+		return instance:FindFirstAncestorWhichIsA("LayerCollector")
+	end
+	function GuiHelper:isGuiObjectHitAtPoint(guiObject, point)
+		if not guiObject.Visible or not self:isPointInsideGuiObject(guiObject, point) then
+			return false
+		end
+		local current = guiObject.Parent
+		while current ~= nil do
+			if current:IsA("LayerCollector") then
+				return current.Enabled and not current:IsA("SurfaceGuiBase")
+			end
+			if current:IsA("GuiObject") then
+				if not current.Visible then
+					return false
+				end
+				if (current.ClipsDescendants or current:IsA("CanvasGroup")) and not self:isPointInsideGuiObject(current, point) then
+					return false
+				end
+			end
+			current = current.Parent
+		end
+		return false
+	end
+	function GuiHelper:isRenderedAbove(a, b)
+		if a == b then
+			return false
+		end
+		local surfaceA = self:getRenderSurface(a)
+		local surfaceB = self:getRenderSurface(b)
+		if surfaceA ~= surfaceB then
+			local _result = surfaceA
+			if _result ~= nil then
+				_result = _result:IsA("ScreenGui")
+			end
+			local orderA = if _result then surfaceA.DisplayOrder else 0
+			local _result_1 = surfaceB
+			if _result_1 ~= nil then
+				_result_1 = _result_1:IsA("ScreenGui")
+			end
+			local orderB = if _result_1 then surfaceB.DisplayOrder else 0
+			if orderA ~= orderB then
+				return orderA > orderB
+			end
+			return self:isLaterInTree(surfaceA or a, surfaceB or b)
+		end
+		local _result = surfaceA
+		if _result ~= nil then
+			_result = _result.ZIndexBehavior
+		end
+		local _condition = _result == Enum.ZIndexBehavior.Global
+		if _condition then
+			_condition = a.ZIndex ~= b.ZIndex
+		end
+		if _condition then
+			return a.ZIndex > b.ZIndex
+		end
+		if a:IsDescendantOf(b) then
+			return true
+		end
+		if b:IsDescendantOf(a) then
+			return false
+		end
+		local _result_1 = surfaceA
+		if _result_1 ~= nil then
+			_result_1 = _result_1.ZIndexBehavior
+		end
+		if _result_1 == Enum.ZIndexBehavior.Global then
+			return self:isLaterInTree(a, b)
+		end
+		local divergence = self:getDivergingAncestors(a, b)
+		if divergence == nil then
+			return false
+		end
+		local _binding = divergence
+		local branchA = _binding[1]
+		local branchB = _binding[2]
+		if branchA:IsA("GuiObject") and branchB:IsA("GuiObject") and branchA.ZIndex ~= branchB.ZIndex then
+			return branchA.ZIndex > branchB.ZIndex
+		end
+		return self:getChildIndex(branchA) > self:getChildIndex(branchB)
+	end
+	function GuiHelper:isLaterInTree(a, b)
+		local divergence = self:getDivergingAncestors(a, b)
+		if divergence == nil then
+			return false
+		end
+		return self:getChildIndex(divergence[1]) > self:getChildIndex(divergence[2])
+	end
+	function GuiHelper:getDivergingAncestors(a, b)
+		local branchByAncestor = {}
+		local previous = a
+		local current = a.Parent
+		while current ~= nil do
+			local _current = current
+			local _previous = previous
+			branchByAncestor[_current] = _previous
+			previous = current
+			current = current.Parent
+		end
+		previous = b
+		current = b.Parent
+		while current ~= nil do
+			local _current = current
+			local branchA = branchByAncestor[_current]
+			if branchA ~= nil then
+				return { branchA, previous }
+			end
+			previous = current
+			current = current.Parent
+		end
+		return nil
+	end
+	function GuiHelper:getChildIndex(instance)
+		local parent = instance.Parent
+		if parent == nil then
+			return 0
+		end
+		local _exp = parent:GetChildren()
+		local _instance = instance
+		return (table.find(_exp, _instance) or 0) - 1
 	end
 	function GuiHelper:getRenderSurfaces(root)
 		local surfaces = {}
 		local visit
 		visit = function(instance)
-			for index, child in ipairs(instance:GetChildren()) do
+			local instanceChildren = instance:GetChildren()
+			for index = 0, #instanceChildren - 1 do
+				local child = instanceChildren[index + 1]
 				if child:IsA("LayerCollector") then
 					local _arg0 = {
 						root = child,
@@ -102,7 +234,9 @@ do
 	end
 	function GuiHelper:appendGuiObjects(parent, result)
 		local children = {}
-		for index, child in ipairs(parent:GetChildren()) do
+		local parentChildren = parent:GetChildren()
+		for index = 0, #parentChildren - 1 do
+			local child = parentChildren[index + 1]
 			if not child:IsA("GuiObject") then
 				continue
 			end

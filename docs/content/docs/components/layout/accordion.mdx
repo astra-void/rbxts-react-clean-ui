@@ -4,7 +4,7 @@ description: Organize content into expandable sections.
 icon: ListCollapse
 ---
 
-`Accordion` displays vertically stacked sections that can be expanded and collapsed. It fills the available height of its parent.
+`Accordion` displays vertically stacked sections that can be expanded and collapsed. By default it fills the available height of its parent; set `autoSize` to size it to its content instead.
 
 ## Basic usage
 
@@ -44,22 +44,90 @@ Opening an item closes the previously open item. By default, activating the open
 </Accordion>
 ```
 
+## Multiple open items
+
+Set `multiple` to let several items be open at once. Activating an item toggles only that item. In this mode `defaultValue` and `value` are `string[]`, and `onValueChange` receives the complete next array of open values, in item order. `collapsible` is ignored, because any item can always be closed.
+
+```tsx
+<Accordion multiple defaultValue={["overview", "features"]}>
+    {/* items */}
+</Accordion>
+```
+
+Pass `multiple` as a literal `true` (as above, or `multiple={true}`) so the types narrow to `AccordionMultipleProps`.
+
+## Sizing to content
+
+By default the accordion fills 100% of its parent's width and height. Set `autoSize` to keep the full width but make the height follow the items instead. The accordion then grows and shrinks as items open and close, following the open/close animation.
+
+```tsx
+<Accordion autoSize defaultValue="overview">
+    {/* items */}
+</Accordion>
+```
+
+## Keeping content mounted
+
+By default an item's content is unmounted once its closing animation completes, so any state inside it is lost. Set `keepMounted` to keep every item's content mounted from the first render. Closed content is collapsed to zero height and hidden, so it cannot be seen, clicked, or selected with a gamepad, but its component state survives closing and reopening.
+
+```tsx
+<Accordion keepMounted collapsible defaultValue="settings">
+    {/* items */}
+</Accordion>
+```
+
+## Independent, content-sized sections
+
+Combine `autoSize`, `multiple`, and `keepMounted` for a stack of independent sections, such as a settings panel, where each section opens on its own, the accordion takes only the height it needs, and inputs keep their values while their section is closed.
+
+```tsx
+import React from "@rbxts/react";
+import { Accordion, Container, Input, Text } from "@rbxts/react-clean-ui";
+
+export function SettingsSectionsExample() {
+    return (
+        <Container width="75%">
+            <Accordion autoSize multiple keepMounted defaultValue={["profile"]}>
+                <Accordion.Item value="profile">
+                    <Accordion.Header text="Profile" />
+                    <Accordion.Content>
+                        <Input placeholder="Display name" />
+                    </Accordion.Content>
+                </Accordion.Item>
+                <Accordion.Item value="audio">
+                    <Accordion.Header text="Audio" />
+                    <Accordion.Content>
+                        <Text text="Volume and sound settings." />
+                    </Accordion.Content>
+                </Accordion.Item>
+            </Accordion>
+        </Container>
+    );
+}
+```
+
 ## Accordion
 
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
-| `defaultValue` | `string` | — | Initially open item for an uncontrolled accordion. |
-| `value` | `string` | — | Currently open item for a controlled accordion. |
-| `onValueChange` | `(value: string \| undefined) => void` | — | Called with the next open item. |
-| `collapsible` | `boolean` | `false` | Allows the open item to close. |
+| `multiple` | `boolean` | `false` | Allows several items to be open at once. Switches the props to `AccordionMultipleProps`. |
+| `defaultValue` | `string` (single) or `string[]` (`multiple`) | — | Initially open item(s) for an uncontrolled accordion. |
+| `value` | `string` (single) or `string[]` (`multiple`) | — | Currently open item(s) for a controlled accordion. |
+| `onValueChange` | `(value: string \| undefined) => void` (single) or `(value: string[]) => void` (`multiple`) | — | Called with the next open item, or the next array of open items in `multiple` mode. |
+| `collapsible` | `boolean` | `false` | Allows the open item to close. Ignored in `multiple` mode. |
+| `autoSize` | `boolean` | `false` | Sizes the accordion's height to its content instead of filling 100% of its parent. |
+| `keepMounted` | `boolean` | `false` | Keeps closed items' content mounted and hidden, so its state survives. |
 | `animationDuration` | `number` | Theme value | Overrides the transition duration in seconds. |
 | `scale` | `"xs" \| "sm" \| "md" \| "lg" \| "xl"` | Theme default | Controls the spacing between accordion items. |
+| `name` | `string` | `"Accordion"` | Sets the root instance name. |
+
+The props type is `AccordionProps` in single mode (`multiple` omitted or `false`) and `AccordionMultipleProps` when `multiple` is `true`.
 
 ## Child components
 
 - `Accordion.Item` requires a unique `value` and accepts `disabled`.
 - `Accordion.Header` is the activation target and accepts an optional `icon` and `text`. When `text` is provided, it renders a `<Text>` component automatically; otherwise children are used.
-- `Accordion.Content` is mounted while its item is expanded and unmounted after closing. It accepts an optional `text` prop that renders a `<Text>` component when provided; otherwise children are used.
+- `Accordion.Content` is mounted while its item is expanded and unmounted after closing, unless `keepMounted` is set. It accepts an optional `text` prop that renders a `<Text>` component when provided; otherwise children are used.
 
 Only direct `Accordion.Item` children are used. Within each item, the first direct header and content are used; an item without a header is omitted.
 
@@ -71,6 +139,16 @@ Supplying `value` makes the accordion controlled. Interactions call `onValueChan
 const [value, setValue] = React.useState<string>();
 
 <Accordion value={value} onValueChange={setValue} collapsible>
+    {/* items */}
+</Accordion>
+```
+
+In `multiple` mode, the controlled value is an array.
+
+```tsx
+const [open, setOpen] = React.useState<string[]>([]);
+
+<Accordion multiple value={open} onValueChange={setOpen}>
     {/* items */}
 </Accordion>
 ```

@@ -16,7 +16,8 @@ export interface LayoutRect {
 	centerY: number;
 }
 
-export const STUDIO_SKIP_MESSAGE = "Requires a real Roblox Instance tree - run inside Roblox Studio via the TestRunner.";
+export const STUDIO_SKIP_MESSAGE =
+	"Requires a real Roblox Instance tree - run inside Roblox Studio via the TestRunner.";
 
 export interface MountedElement {
 	host: Frame;
@@ -69,7 +70,12 @@ export function mountInScreenGui(width: number, height: number, element: React.R
 	return { host, root, update, resize, unmount };
 }
 
-export function withMounted(width: number, height: number, element: React.ReactElement, fn: (mounted: MountedElement) => void) {
+export function withMounted(
+	width: number,
+	height: number,
+	element: React.ReactElement,
+	fn: (mounted: MountedElement) => void,
+) {
 	const mounted = mountInScreenGui(width, height, element);
 
 	try {
@@ -93,23 +99,52 @@ export function waitForLayout<T extends defined>(resolve: () => T | undefined, f
 	return Assert.fail(failureMessage);
 }
 
-export function waitForDescendant<T extends Instance>(root: Instance, name: string, predicate: (instance: T) => boolean, failureMessage?: string): T {
-	return waitForLayout(() => {
-		const found = root.FindFirstChild(name, true) as T | undefined;
-		return found !== undefined && predicate(found) ? found : undefined;
-	}, failureMessage ?? `Timed out waiting for a descendant named "${name}" to satisfy its predicate`);
+export function settleFrames(count: number) {
+	for (let frame = 0; frame < count; frame++) {
+		task.wait();
+	}
 }
 
-export function waitForGuiObject<T extends GuiObject>(root: Instance, name: string, predicate?: (gui: T) => boolean, failureMessage?: string): T {
+export function waitForRemoval(host: Instance, name: string, frames = 120) {
+	for (let attempt = 0; attempt < frames; attempt++) {
+		if (host.FindFirstChild(name, true) === undefined) return;
+		task.wait();
+	}
+
+	Assert.fail(`Timed out waiting for "${name}" to be removed from ${host.GetFullName()}`);
+}
+
+export function waitForDescendant<T extends Instance>(
+	root: Instance,
+	name: string,
+	predicate: (instance: T) => boolean,
+	failureMessage?: string,
+): T {
+	return waitForLayout(
+		() => {
+			const found = root.FindFirstChild(name, true) as T | undefined;
+			return found !== undefined && predicate(found) ? found : undefined;
+		},
+		failureMessage ?? `Timed out waiting for a descendant named "${name}" to satisfy its predicate`,
+	);
+}
+
+export function waitForGuiObject<T extends GuiObject>(
+	root: Instance,
+	name: string,
+	predicate?: (gui: T) => boolean,
+	failureMessage?: string,
+): T {
 	const test = predicate ?? ((gui: T) => gui.AbsoluteSize.X > 0 && gui.AbsoluteSize.Y > 0);
 
 	return waitForDescendant<T>(
 		root,
 		name,
 		test,
-		failureMessage ?? (predicate === undefined
-			? `Timed out waiting for a GuiObject named "${name}" to render with a non-zero AbsoluteSize`
-			: `Timed out waiting for a GuiObject named "${name}" to satisfy its predicate`),
+		failureMessage ??
+			(predicate === undefined
+				? `Timed out waiting for a GuiObject named "${name}" to render with a non-zero AbsoluteSize`
+				: `Timed out waiting for a GuiObject named "${name}" to satisfy its predicate`),
 	);
 }
 
@@ -167,7 +202,11 @@ export function assertContained(child: GuiObject, parent: GuiObject, label: stri
 	);
 }
 
-export function assertAllDescendantsContained(container: GuiObject, label: string, ignore?: (gui: GuiObject) => boolean) {
+export function assertAllDescendantsContained(
+	container: GuiObject,
+	label: string,
+	ignore?: (gui: GuiObject) => boolean,
+) {
 	const walk = (parent: Instance, clipAncestor: GuiObject) => {
 		for (const child of parent.GetChildren()) {
 			if (!child.IsA("GuiObject")) {
@@ -237,7 +276,13 @@ export function assertTextFits(textObject: TextLabel | TextButton | TextBox, nam
 	Assert.true(bounds.X <= size.X + 1 && bounds.Y <= size.Y + 1, message);
 }
 
-export function assertCenteredIn(child: GuiObject, parent: GuiObject, axis: "x" | "y" | "both", tolerance = 1, label = "") {
+export function assertCenteredIn(
+	child: GuiObject,
+	parent: GuiObject,
+	axis: "x" | "y" | "both",
+	tolerance = 1,
+	label = "",
+) {
 	const childRect = rect(child);
 	const parentRect = rect(parent);
 	const prefix = label !== "" ? `${label}: ` : "";
@@ -257,7 +302,13 @@ export function assertCenteredIn(child: GuiObject, parent: GuiObject, axis: "x" 
 	}
 }
 
-export function assertSizeApprox(gui: GuiObject, expectedWidth: number | undefined, expectedHeight: number | undefined, tolerance = 1, label = "") {
+export function assertSizeApprox(
+	gui: GuiObject,
+	expectedWidth: number | undefined,
+	expectedHeight: number | undefined,
+	tolerance = 1,
+	label = "",
+) {
 	const guiRect = rect(gui);
 	const prefix = label !== "" ? `${label}: ` : "";
 
@@ -285,7 +336,12 @@ export function assertNonZeroSize(gui: GuiObject, label: string) {
 	);
 }
 
-export function assertMinSize(gui: GuiObject, minWidth: number | undefined, minHeight: number | undefined, label: string) {
+export function assertMinSize(
+	gui: GuiObject,
+	minWidth: number | undefined,
+	minHeight: number | undefined,
+	label: string,
+) {
 	const guiRect = rect(gui);
 
 	if (minWidth !== undefined) {

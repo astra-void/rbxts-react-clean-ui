@@ -19,9 +19,12 @@ local assertCenteredIn = _layout.assertCenteredIn
 local assertContained = _layout.assertContained
 local findDescendant = _layout.findDescendant
 local rect = _layout.rect
+local settleFrames = _layout.settleFrames
 local waitForGuiObject = _layout.waitForGuiObject
 local waitForLayout = _layout.waitForLayout
+local waitForRemoval = _layout.waitForRemoval
 local withMounted = _layout.withMounted
+local findHostFiber = TS.import(script, script.Parent.Parent.Parent, "Helpers", "fiber").findHostFiber
 local CONTENT = "Helpful hint"
 local hoverEvents
 local HoverTarget = React.forwardRef(function(props, ref)
@@ -35,10 +38,15 @@ local HoverTarget = React.forwardRef(function(props, ref)
 		Event = props.Event,
 	})
 end)
-local function tooltipApp(placement)
+local function tooltipApp(placement, options)
+	if options == nil then
+		options = {}
+	end
 	return React.createElement(OverlayProvider, nil, React.createElement(Tooltip, {
 		content = CONTENT,
 		placement = placement,
+		disabled = options.disabled,
+		open = options.open,
 	}, React.createElement(HoverTarget)))
 end
 local function waitForTarget(host)
@@ -59,14 +67,23 @@ local function unhover(target)
 	Assert:notUndefined(events.MouseLeave, "Expected Tooltip to inject a MouseLeave handler")
 	events.MouseLeave(target, 0, 0)
 end
-local function waitForRemoval(host, name)
-	for attempt = 0, 119 do
-		if host:FindFirstChild(name, true) == nil then
-			return nil
-		end
-		task.wait()
-	end
-	Assert:fail(`Timed out waiting for "{name}" to be removed from {host:GetFullName()}`)
+local function nativeApp()
+	return React.createElement(OverlayProvider, nil, React.createElement(Tooltip, {
+		content = CONTENT,
+	}, React.createElement("frame", {
+		key = "NativeTarget",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(100, 40),
+		Position = UDim2.fromOffset(150, 130),
+	})))
+end
+local function waitForNativeTarget(host)
+	waitForGuiObject(host, "OverlayProvider")
+	return waitForGuiObject(host, "NativeTarget", nil, "Timed out waiting for the native <frame> inside Tooltip to mount - the tree failed to render (see the Studio output for the React error)")
+end
+local function assertNoPopup(host, message)
+	settleFrames(10)
+	Assert:undefined(host:FindFirstChild("Tooltip", true), message)
 end
 local TooltipMountValidation
 do
@@ -120,6 +137,111 @@ do
 			waitForGuiObject(mounted.host, "Tooltip")
 			unhover(target)
 			waitForRemoval(mounted.host, "Tooltip")
+		end)
+	end
+	function TooltipMountValidation:disabledNoPopup()
+		hoverEvents = nil
+		withMounted(400, 300, tooltipApp(nil, {
+			disabled = true,
+		}), function(mounted)
+			local target = waitForTarget(mounted.host)
+			hover(target)
+			assertNoPopup(mounted.host, "Expected no Tooltip popup while disabled")
+		end)
+	end
+	function TooltipMountValidation:disabledKeepsInstance()
+		hoverEvents = nil
+		withMounted(400, 300, tooltipApp(nil, {
+			disabled = false,
+		}), function(mounted)
+			local target = waitForTarget(mounted.host)
+			mounted.update(tooltipApp(nil, {
+				disabled = true,
+			}))
+			settleFrames(2)
+			Assert:equal(findDescendant(mounted.host, "HoverTarget"), target, "Expected disabling not to remount the child")
+			local _result = hoverEvents
+			if _result ~= nil then
+				_result = _result.MouseEnter
+			end
+			Assert:notUndefined(_result, "Expected the child to keep its MouseEnter handler while disabled")
+			mounted.update(tooltipApp(nil, {
+				disabled = false,
+			}))
+			settleFrames(2)
+			Assert:equal(findDescendant(mounted.host, "HoverTarget"), target, "Expected re-enabling not to remount the child")
+			hover(target)
+			waitForGuiObject(mounted.host, "Tooltip")
+		end)
+	end
+	function TooltipMountValidation:disableHidesOpen()
+		hoverEvents = nil
+		withMounted(400, 300, tooltipApp(), function(mounted)
+			local target = waitForTarget(mounted.host)
+			hover(target)
+			waitForGuiObject(mounted.host, "Tooltip")
+			mounted.update(tooltipApp(nil, {
+				disabled = true,
+			}))
+			waitForRemoval(mounted.host, "Tooltip")
+		end)
+	end
+	function TooltipMountValidation:controlledOpen()
+		hoverEvents = nil
+		withMounted(400, 300, tooltipApp(nil, {
+			open = true,
+		}), function(mounted)
+			local target = waitForTarget(mounted.host)
+			local tooltip = waitForGuiObject(mounted.host, "Tooltip")
+			assertCenteredIn(tooltip, target, "x", 1, "controlled tooltip")
+			unhover(target)
+			settleFrames(20)
+			Assert:notUndefined(mounted.host:FindFirstChild("Tooltip", true), "Expected MouseLeave not to close a controlled open Tooltip")
+			mounted.update(tooltipApp(nil, {
+				open = false,
+			}))
+			waitForRemoval(mounted.host, "Tooltip")
+		end)
+	end
+	function TooltipMountValidation:controlledClosedIgnoresHover()
+		hoverEvents = nil
+		withMounted(400, 300, tooltipApp(nil, {
+			open = false,
+		}), function(mounted)
+			local target = waitForTarget(mounted.host)
+			hover(target)
+			assertNoPopup(mounted.host, "Expected hover not to open a Tooltip controlled with open={false}")
+		end)
+	end
+	function TooltipMountValidation:disabledOverridesOpen()
+		hoverEvents = nil
+		withMounted(400, 300, tooltipApp(nil, {
+			open = true,
+			disabled = true,
+		}), function(mounted)
+			waitForTarget(mounted.host)
+			assertNoPopup(mounted.host, "Expected disabled to suppress a Tooltip controlled with open={true}")
+		end)
+	end
+	function TooltipMountValidation:nativeChildMounts()
+		withMounted(400, 300, nativeApp(), function(mounted)
+			local target = waitForNativeTarget(mounted.host)
+			Assert:equal(target.Parent, mounted.host, "Expected the native child to render unwrapped under the host")
+		end)
+	end
+	function TooltipMountValidation:nativeChildShows()
+		withMounted(400, 300, nativeApp(), function(mounted)
+			local target = waitForNativeTarget(mounted.host)
+			local mouseEnterKey = React.Event.MouseEnter
+			local _result = findHostFiber(mounted, target).memoizedProps
+			if _result ~= nil then
+				_result = _result[mouseEnterKey]
+			end
+			local handler = _result
+			Assert:notUndefined(handler, "Expected the native child to carry a MouseEnter handler under React.Event.MouseEnter")
+			handler(target, 0, 0)
+			local tooltip = waitForGuiObject(mounted.host, "Tooltip")
+			assertCenteredIn(tooltip, target, "x", 1, "native-child tooltip")
 		end)
 	end
 	local _decorator = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
@@ -188,6 +310,166 @@ do
 	})
 	if _descriptor_9 then
 		TooltipMountValidation.hidesAfterLeave = _descriptor_9.value
+	end
+	local _decorator_7 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_8 = DisplayName("With disabled set, hovering the target never portals a popup into the overlay")
+	local _descriptor_10 = Test(TooltipMountValidation, "disabledNoPopup", {
+		value = TooltipMountValidation.disabledNoPopup,
+	})
+	if _descriptor_10 then
+		TooltipMountValidation.disabledNoPopup = _descriptor_10.value
+	end
+	local _descriptor_11 = _decorator_8(TooltipMountValidation, "disabledNoPopup", {
+		value = TooltipMountValidation.disabledNoPopup,
+	})
+	if _descriptor_11 then
+		TooltipMountValidation.disabledNoPopup = _descriptor_11.value
+	end
+	local _descriptor_12 = _decorator_7(TooltipMountValidation, "disabledNoPopup", {
+		value = TooltipMountValidation.disabledNoPopup,
+	})
+	if _descriptor_12 then
+		TooltipMountValidation.disabledNoPopup = _descriptor_12.value
+	end
+	local _decorator_9 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_10 = DisplayName("Toggling disabled on and off keeps the very same target instance mounted, with hover handlers still injected")
+	local _descriptor_13 = Test(TooltipMountValidation, "disabledKeepsInstance", {
+		value = TooltipMountValidation.disabledKeepsInstance,
+	})
+	if _descriptor_13 then
+		TooltipMountValidation.disabledKeepsInstance = _descriptor_13.value
+	end
+	local _descriptor_14 = _decorator_10(TooltipMountValidation, "disabledKeepsInstance", {
+		value = TooltipMountValidation.disabledKeepsInstance,
+	})
+	if _descriptor_14 then
+		TooltipMountValidation.disabledKeepsInstance = _descriptor_14.value
+	end
+	local _descriptor_15 = _decorator_9(TooltipMountValidation, "disabledKeepsInstance", {
+		value = TooltipMountValidation.disabledKeepsInstance,
+	})
+	if _descriptor_15 then
+		TooltipMountValidation.disabledKeepsInstance = _descriptor_15.value
+	end
+	local _decorator_11 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_12 = DisplayName("Disabling a Tooltip whose popup is open hides and removes the popup")
+	local _descriptor_16 = Test(TooltipMountValidation, "disableHidesOpen", {
+		value = TooltipMountValidation.disableHidesOpen,
+	})
+	if _descriptor_16 then
+		TooltipMountValidation.disableHidesOpen = _descriptor_16.value
+	end
+	local _descriptor_17 = _decorator_12(TooltipMountValidation, "disableHidesOpen", {
+		value = TooltipMountValidation.disableHidesOpen,
+	})
+	if _descriptor_17 then
+		TooltipMountValidation.disableHidesOpen = _descriptor_17.value
+	end
+	local _descriptor_18 = _decorator_11(TooltipMountValidation, "disableHidesOpen", {
+		value = TooltipMountValidation.disableHidesOpen,
+	})
+	if _descriptor_18 then
+		TooltipMountValidation.disableHidesOpen = _descriptor_18.value
+	end
+	local _decorator_13 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_14 = DisplayName("With open={true} the popup shows without a hover, survives a MouseLeave, and goes away once open becomes false")
+	local _descriptor_19 = Test(TooltipMountValidation, "controlledOpen", {
+		value = TooltipMountValidation.controlledOpen,
+	})
+	if _descriptor_19 then
+		TooltipMountValidation.controlledOpen = _descriptor_19.value
+	end
+	local _descriptor_20 = _decorator_14(TooltipMountValidation, "controlledOpen", {
+		value = TooltipMountValidation.controlledOpen,
+	})
+	if _descriptor_20 then
+		TooltipMountValidation.controlledOpen = _descriptor_20.value
+	end
+	local _descriptor_21 = _decorator_13(TooltipMountValidation, "controlledOpen", {
+		value = TooltipMountValidation.controlledOpen,
+	})
+	if _descriptor_21 then
+		TooltipMountValidation.controlledOpen = _descriptor_21.value
+	end
+	local _decorator_15 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_16 = DisplayName("With open={false}, hovering the target does not show the popup")
+	local _descriptor_22 = Test(TooltipMountValidation, "controlledClosedIgnoresHover", {
+		value = TooltipMountValidation.controlledClosedIgnoresHover,
+	})
+	if _descriptor_22 then
+		TooltipMountValidation.controlledClosedIgnoresHover = _descriptor_22.value
+	end
+	local _descriptor_23 = _decorator_16(TooltipMountValidation, "controlledClosedIgnoresHover", {
+		value = TooltipMountValidation.controlledClosedIgnoresHover,
+	})
+	if _descriptor_23 then
+		TooltipMountValidation.controlledClosedIgnoresHover = _descriptor_23.value
+	end
+	local _descriptor_24 = _decorator_15(TooltipMountValidation, "controlledClosedIgnoresHover", {
+		value = TooltipMountValidation.controlledClosedIgnoresHover,
+	})
+	if _descriptor_24 then
+		TooltipMountValidation.controlledClosedIgnoresHover = _descriptor_24.value
+	end
+	local _decorator_17 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_18 = DisplayName("disabled wins over open={true}: no popup is shown")
+	local _descriptor_25 = Test(TooltipMountValidation, "disabledOverridesOpen", {
+		value = TooltipMountValidation.disabledOverridesOpen,
+	})
+	if _descriptor_25 then
+		TooltipMountValidation.disabledOverridesOpen = _descriptor_25.value
+	end
+	local _descriptor_26 = _decorator_18(TooltipMountValidation, "disabledOverridesOpen", {
+		value = TooltipMountValidation.disabledOverridesOpen,
+	})
+	if _descriptor_26 then
+		TooltipMountValidation.disabledOverridesOpen = _descriptor_26.value
+	end
+	local _descriptor_27 = _decorator_17(TooltipMountValidation, "disabledOverridesOpen", {
+		value = TooltipMountValidation.disabledOverridesOpen,
+	})
+	if _descriptor_27 then
+		TooltipMountValidation.disabledOverridesOpen = _descriptor_27.value
+	end
+	local _decorator_19 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_20 = DisplayName("Tooltip wrapping a native <frame> mounts without error and leaves the frame in place")
+	local _descriptor_28 = Test(TooltipMountValidation, "nativeChildMounts", {
+		value = TooltipMountValidation.nativeChildMounts,
+	})
+	if _descriptor_28 then
+		TooltipMountValidation.nativeChildMounts = _descriptor_28.value
+	end
+	local _descriptor_29 = _decorator_20(TooltipMountValidation, "nativeChildMounts", {
+		value = TooltipMountValidation.nativeChildMounts,
+	})
+	if _descriptor_29 then
+		TooltipMountValidation.nativeChildMounts = _descriptor_29.value
+	end
+	local _descriptor_30 = _decorator_19(TooltipMountValidation, "nativeChildMounts", {
+		value = TooltipMountValidation.nativeChildMounts,
+	})
+	if _descriptor_30 then
+		TooltipMountValidation.nativeChildMounts = _descriptor_30.value
+	end
+	local _decorator_21 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_22 = DisplayName("A native <frame> child carries a real MouseEnter handler, and firing it opens the popup")
+	local _descriptor_31 = Test(TooltipMountValidation, "nativeChildShows", {
+		value = TooltipMountValidation.nativeChildShows,
+	})
+	if _descriptor_31 then
+		TooltipMountValidation.nativeChildShows = _descriptor_31.value
+	end
+	local _descriptor_32 = _decorator_22(TooltipMountValidation, "nativeChildShows", {
+		value = TooltipMountValidation.nativeChildShows,
+	})
+	if _descriptor_32 then
+		TooltipMountValidation.nativeChildShows = _descriptor_32.value
+	end
+	local _descriptor_33 = _decorator_21(TooltipMountValidation, "nativeChildShows", {
+		value = TooltipMountValidation.nativeChildShows,
+	})
+	if _descriptor_33 then
+		TooltipMountValidation.nativeChildShows = _descriptor_33.value
 	end
 	TooltipMountValidation = Tag("Studio")(TooltipMountValidation) or TooltipMountValidation
 end
