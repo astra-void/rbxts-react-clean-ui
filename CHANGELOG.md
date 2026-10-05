@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.0
+
+### Additions
+
+- **`Button` `modal` prop.** New `modal?: boolean` (default `false`) sets the native `GuiButton.Modal` on the Button's `ImageButton`, freeing the mouse cursor in first-person / shift-lock while the button is visible. Unrelated to the library's `Modal` component. ([#2](https://github.com/Shadercloud/rbxts-react-clean-ui/issues/2))
+- **`HoverButton` forwards `Modal`.** It was previously dropped when set in `default` / `hover` / `focus`.
+
 ## 1.4.0
 
 ### Behaviour changes (bug fixes, check before upgrading)

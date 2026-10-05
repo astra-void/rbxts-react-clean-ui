@@ -15,6 +15,7 @@ export interface ButtonProps extends SpacedElementProps, ShadowElementProps, ZIn
     styleOverride?: ButtonStyleOverride;
     name?: string;
     padding?: CssPadding;
+    modal?: boolean;
 }
 export interface ButtonTextProps extends ScalableElementProps, IntentElementProps {
     children?: string;

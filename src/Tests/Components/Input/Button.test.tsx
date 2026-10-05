@@ -222,6 +222,28 @@ class ButtonMountValidation {
 			assertStackedHorizontally([icon, label], "padded icon + text row");
 		});
 	}
+
+	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	@DisplayName("Without the modal prop the root ImageButton leaves Modal false")
+	@Test
+	public modalDefaultsOff() {
+		withMounted(400, 200, <Button text="Save" />, (mounted) => {
+			const button = waitForButton(mounted.host);
+
+			Assert.false(button.Modal, "Expected Modal=false when the modal prop is unset");
+		});
+	}
+
+	@Skip(!Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	@DisplayName("modal={true} is forwarded to the root ImageButton's native Modal property")
+	@Test
+	public modalForwarded() {
+		withMounted(400, 200, <Button text="Save" modal={true} />, (mounted) => {
+			const button = waitForButton(mounted.host);
+
+			Assert.true(button.Modal, "Expected Modal=true when modal={true} is passed");
+		});
+	}
 }
 
 export = ButtonMountValidation;

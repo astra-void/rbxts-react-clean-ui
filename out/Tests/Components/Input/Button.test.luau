@@ -199,6 +199,23 @@ do
 			assertStackedHorizontally({ icon, label }, "padded icon + text row")
 		end)
 	end
+	function ButtonMountValidation:modalDefaultsOff()
+		withMounted(400, 200, React.createElement(Button, {
+			text = "Save",
+		}), function(mounted)
+			local button = waitForButton(mounted.host)
+			Assert["false"](Assert, button.Modal, "Expected Modal=false when the modal prop is unset")
+		end)
+	end
+	function ButtonMountValidation:modalForwarded()
+		withMounted(400, 200, React.createElement(Button, {
+			text = "Save",
+			modal = true,
+		}), function(mounted)
+			local button = waitForButton(mounted.host)
+			Assert["true"](Assert, button.Modal, "Expected Modal=true when modal={true} is passed")
+		end)
+	end
 	local _decorator = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
 	local _decorator_1 = DisplayName("With an icon and text, the Button auto-sizes and every visible descendant stays inside it")
 	local _descriptor = Test(ButtonMountValidation, "mountsContained", {
@@ -398,6 +415,46 @@ do
 	})
 	if _descriptor_29 then
 		ButtonMountValidation.paddingKeepsOrder = _descriptor_29.value
+	end
+	local _decorator_20 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_21 = DisplayName("Without the modal prop the root ImageButton leaves Modal false")
+	local _descriptor_30 = Test(ButtonMountValidation, "modalDefaultsOff", {
+		value = ButtonMountValidation.modalDefaultsOff,
+	})
+	if _descriptor_30 then
+		ButtonMountValidation.modalDefaultsOff = _descriptor_30.value
+	end
+	local _descriptor_31 = _decorator_21(ButtonMountValidation, "modalDefaultsOff", {
+		value = ButtonMountValidation.modalDefaultsOff,
+	})
+	if _descriptor_31 then
+		ButtonMountValidation.modalDefaultsOff = _descriptor_31.value
+	end
+	local _descriptor_32 = _decorator_20(ButtonMountValidation, "modalDefaultsOff", {
+		value = ButtonMountValidation.modalDefaultsOff,
+	})
+	if _descriptor_32 then
+		ButtonMountValidation.modalDefaultsOff = _descriptor_32.value
+	end
+	local _decorator_22 = Skip(not Runtime.isRoblox(), STUDIO_SKIP_MESSAGE)
+	local _decorator_23 = DisplayName("modal={true} is forwarded to the root ImageButton's native Modal property")
+	local _descriptor_33 = Test(ButtonMountValidation, "modalForwarded", {
+		value = ButtonMountValidation.modalForwarded,
+	})
+	if _descriptor_33 then
+		ButtonMountValidation.modalForwarded = _descriptor_33.value
+	end
+	local _descriptor_34 = _decorator_23(ButtonMountValidation, "modalForwarded", {
+		value = ButtonMountValidation.modalForwarded,
+	})
+	if _descriptor_34 then
+		ButtonMountValidation.modalForwarded = _descriptor_34.value
+	end
+	local _descriptor_35 = _decorator_22(ButtonMountValidation, "modalForwarded", {
+		value = ButtonMountValidation.modalForwarded,
+	})
+	if _descriptor_35 then
+		ButtonMountValidation.modalForwarded = _descriptor_35.value
 	end
 	ButtonMountValidation = Tag("Studio")(ButtonMountValidation) or ButtonMountValidation
 end

@@ -55,6 +55,7 @@ export interface ButtonProps extends
     styleOverride?: ButtonStyleOverride;
     name?: string;
     padding?: CssPadding;
+    modal?: boolean;
 }
 
 export interface ButtonTextProps extends ScalableElementProps, IntentElementProps {
@@ -166,6 +167,7 @@ const Button = React.forwardRef<ImageButton, ButtonProps>(
                 key={props.name ?? "Button"}
                 ref={ref}
                 Active={!props.disabled}
+                Modal={props.modal ?? false}
                 Event={{
                     ...props.Event,
 

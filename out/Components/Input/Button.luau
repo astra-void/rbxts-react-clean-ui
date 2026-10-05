@@ -142,6 +142,11 @@ local Button = React.forwardRef(function(props, ref)
 	_attributes.key = _condition_1
 	_attributes.ref = ref
 	_attributes.Active = not props.disabled
+	local _condition_2 = props.modal
+	if _condition_2 == nil then
+		_condition_2 = false
+	end
+	_attributes.Modal = _condition_2
 	local _object = {}
 	local _spread = props.Event
 	if _spread then
@@ -195,31 +200,31 @@ local Button = React.forwardRef(function(props, ref)
 				_result_3 = _result_3.X
 			end
 		end
-		local _condition_2 = _result_3
-		if _condition_2 == nil then
-			_condition_2 = 0
+		local _condition_3 = _result_3
+		if _condition_3 == nil then
+			_condition_3 = 0
 		end
-		_result_2 = _condition_2
+		_result_2 = _condition_3
 	else
 		_result_2 = 0
 	end
 	_attributes.Size = UDim2.fromOffset(_result_2, 0)
 	_attributes.AutomaticSize = Enum.AutomaticSize.XY
-	local _condition_2 = props.BackgroundTransparency
-	if _condition_2 == nil then
+	local _condition_3 = props.BackgroundTransparency
+	if _condition_3 == nil then
 		local _result_3 = props.styleOverride
 		if _result_3 ~= nil then
 			_result_3 = _result_3.backgroundTransparency
 		end
-		_condition_2 = _result_3
-		if _condition_2 == nil then
-			_condition_2 = intentBackgroundTransparency
-			if _condition_2 == nil then
-				_condition_2 = theme.components.button.backgroundTransparency
+		_condition_3 = _result_3
+		if _condition_3 == nil then
+			_condition_3 = intentBackgroundTransparency
+			if _condition_3 == nil then
+				_condition_3 = theme.components.button.backgroundTransparency
 			end
 		end
 	end
-	_attributes.BackgroundTransparency = _condition_2
+	_attributes.BackgroundTransparency = _condition_3
 	_attributes.BackgroundColor3 = intentColors.backgroundColor
 	_attributes.AutoButtonColor = false
 	_attributes.LayoutOrder = props.LayoutOrder
@@ -237,27 +242,27 @@ local Button = React.forwardRef(function(props, ref)
 	if _result_3 ~= nil then
 		_result_3 = _result_3.cornerRadius
 	end
-	local _condition_3 = _result_3
-	if _condition_3 == nil then
-		_condition_3 = theme.components.button.cornerRadius
+	local _condition_4 = _result_3
+	if _condition_4 == nil then
+		_condition_4 = theme.components.button.cornerRadius
 	end
-	_attributes_1.radius = _condition_3
+	_attributes_1.radius = _condition_4
 	local _exp_3 = React.createElement(Corners, _attributes_1)
 	local _attributes_2 = {
 		key = "Stroke",
 	}
-	local _condition_4 = intentColors.borderThickness
-	if _condition_4 == nil then
+	local _condition_5 = intentColors.borderThickness
+	if _condition_5 == nil then
 		local _result_4 = props.styleOverride
 		if _result_4 ~= nil then
 			_result_4 = _result_4.borderThickness
 		end
-		_condition_4 = _result_4
-		if _condition_4 == nil then
-			_condition_4 = theme.components.button.borderThickness
+		_condition_5 = _result_4
+		if _condition_5 == nil then
+			_condition_5 = theme.components.button.borderThickness
 		end
 	end
-	_attributes_2.Thickness = _condition_4
+	_attributes_2.Thickness = _condition_5
 	_attributes_2.BorderStrokePosition = Enum.BorderStrokePosition.Inner
 	_attributes_2.Color = intentColors.borderColor
 	local _exp_4 = React.createElement("uistroke", _attributes_2)
@@ -267,11 +272,11 @@ local Button = React.forwardRef(function(props, ref)
 	if _result_4 ~= nil then
 		_result_4 = _result_4.boxShadow
 	end
-	local _condition_5 = _result_4
-	if _condition_5 == nil then
-		_condition_5 = theme.components.button.boxShadow
+	local _condition_6 = _result_4
+	if _condition_6 == nil then
+		_condition_6 = theme.components.button.boxShadow
 	end
-	_attributes_3.value = _condition_5
+	_attributes_3.value = _condition_6
 	local _exp_5 = React.createElement(BoxShadow, _attributes_3)
 	local _exp_6 = React.createElement(Gradient, {
 		value = intentColors.backgroundGradient,

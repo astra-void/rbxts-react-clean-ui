@@ -61,6 +61,7 @@ export function HoverButton(propSet: HoverButtonProps) {
                 BorderSizePixel={props.BorderSizePixel === undefined ? 0 : props.BorderSizePixel}
                 ClipsDescendants={props.ClipsDescendants}
                 LayoutOrder={props.LayoutOrder}
+                Modal={props.Modal}
                 NextSelectionDown={props.NextSelectionDown}
                 NextSelectionLeft={props.NextSelectionLeft}
                 NextSelectionRight={props.NextSelectionRight}

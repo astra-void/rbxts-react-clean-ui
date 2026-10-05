@@ -129,6 +129,16 @@ Set `disabled` to prevent interaction. The button switches to the intent's `disa
 <Button text="Disabled" intent="primary" disabled />
 ```
 
+## Freeing the mouse cursor
+
+Set `modal` to forward Roblox's native [`Modal`](https://create.roblox.com/docs/reference/engine/classes/GuiButton#Modal) property to the underlying `ImageButton`. While the button is visible, Roblox frees the mouse cursor even in first-person or shift-lock, so players can click menu buttons while the camera is locked.
+
+```tsx
+<Button text="Menu" modal />
+```
+
+This is unrelated to Clean UI's own [`Modal`](/components/interaction/modal) component and modal provider. It only controls the native cursor behaviour.
+
 ## Grouped buttons
 
 Set `group` on a `Button` and wrap the group in a [`Group`](/components/layout) to make every grouped button match the width of the widest one. This keeps a stack of buttons with icons or labels of differing lengths visually aligned.
@@ -157,6 +167,7 @@ import { Button, Group, VStack } from "@rbxts/react-clean-ui";
 | `children`     | `React.ReactNode`                    | `undefined` | Custom content rendered after the automatic icon/label row.       |
 | `group`        | `boolean`                            | `false`     | Matches this button's width to the widest button in its `Group`.  |
 | `disabled`     | `boolean`                            | `false`     | Disables hover/click interaction and switches to disabled colors. |
+| `modal`        | `boolean`                            | `false`     | Sets the native `Modal` property, freeing the mouse cursor while the button is visible (even in first-person or shift-lock). |
 | `LayoutOrder`  | `number`                             | `undefined` | Native Roblox layout order.                                        |
 | `padding`      | `CssPadding`                         | `undefined` | Overrides the spacing-derived internal padding, per side (for example `8`, `"4 12"`, or `"4px 12px 4px 12px"`). |
 | `styleOverride`| `ButtonStyleOverride`                | `undefined` | Overrides theme values (colors, corners, border, etc.) for this instance only. |
@@ -183,6 +194,7 @@ The button also supports props inherited from the following interfaces.
 * Setting `disabled` sets `Active={false}`, ignores hover and `Activated` events, and switches colours to the intent's `disabled` state (when defined in the theme).
 * When `group` is set and a `Group` ancestor is present, the button's width is fixed to the widest button reporting into that `Group`; its height still grows automatically.
 * Without `text`, `icon`, or `children`, the button renders with no content.
+* `modal` is passed straight through to the `ImageButton`'s native `Modal` property; when unset, Roblox's default (`false`) applies.
 * Internal padding comes from `spacing` (against `theme.spacing`, with `"None"` meaning `0`). When `padding` is set, its parsed per-side values replace the spacing-derived ones. The resolved padding is also reported to `Group`, so a grouped button's width includes it.
 * Background transparency resolves as `BackgroundTransparency` prop, then `styleOverride.backgroundTransparency`, then the current intent's own `backgroundTransparency` (non-`primary` intents only), then `theme.components.button.backgroundTransparency`.
 * Border thickness resolves as the intent state's `borderThickness`, then `styleOverride.borderThickness`, then `theme.components.button.borderThickness`.

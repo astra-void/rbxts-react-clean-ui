@@ -38,6 +38,7 @@ local function HoverButton(propSet)
 	_attributes.BorderSizePixel = if props.BorderSizePixel == nil then 0 else props.BorderSizePixel
 	_attributes.ClipsDescendants = props.ClipsDescendants
 	_attributes.LayoutOrder = props.LayoutOrder
+	_attributes.Modal = props.Modal
 	_attributes.NextSelectionDown = props.NextSelectionDown
 	_attributes.NextSelectionLeft = props.NextSelectionLeft
 	_attributes.NextSelectionRight = props.NextSelectionRight

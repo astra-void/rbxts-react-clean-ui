@@ -9,5 +9,7 @@ declare class ButtonMountValidation {
     defaultPaddingFromTheme(): void;
     paddingOverridesNone(): void;
     paddingKeepsOrder(): void;
+    modalDefaultsOff(): void;
+    modalForwarded(): void;
 }
 export = ButtonMountValidation;
