@@ -7,7 +7,7 @@ export const preview = {
     render: () => (
         <LoomScene>
             <Container width="300" height="300" center>
-                <Pie
+                <Pie label-hover
                     values={[
                         { value: 7, label: "Alpha" },
                         { value: 4, label: "Beta" },
